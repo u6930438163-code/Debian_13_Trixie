@@ -144,6 +144,8 @@ export function createApiClient({
     getIntegrations: () => request('integrations'),
     getTasks: () => request('tasks'),
     getAlexCapabilities: () => request('alex/capabilities'),
+    bridge: (message, sessionId = '', useOpenai = true) => post('bridge', { message, sessionId, useOpenai }),
+    terminateBridge: (sessionId) => post('bridge/terminate', { sessionId }),
     dispatchToAlex: (taskId) => request(`tasks/${encodeURIComponent(taskId)}/dispatch`, {method: 'POST'}),
     createTask: (task) => post('tasks', task),
     getTask: (taskId) => request(`tasks/${encodeURIComponent(taskId)}`),
@@ -1200,17 +1202,23 @@ function bindBridgeForm() {
     if (!msg || !output) return;
     output.textContent = 'Wysyłanie zapytania przez AI Bridge (Gemini/OpenAI + MCP)…';
     try {
-      const res = await api.post('bridge', { sessionId: activeSessionId, message: msg, useOpenai: true });
+      const provider = document.getElementById('bridge-provider')?.value || 'openai';
+      const res = await api.bridge(msg, activeSessionId, provider === 'openai');
       activeSessionId = res.sessionId;
       output.textContent = `[Sesja: ${res.sessionId.slice(0, 8)} | Provider: ${res.provider}]\n\nOdpowiedź:\n${res.response}\n\n[MCP Diagnostics Status: ${res.mcpToolResult?.content?.[0]?.text ? 'Zaliczony' : 'Brak'}]`;
     } catch (err) {
       output.textContent = 'Błąd Bridge: ' + err.message;
     }
   });
-  termBtn?.addEventListener('click', () => {
-    activeSessionId = '';
+  termBtn?.addEventListener('click', async () => {
     const output = document.getElementById('bridge-output');
-    if (output) output.textContent = 'Sesja została zresetowana.';
+    try {
+      if (activeSessionId) await api.terminateBridge(activeSessionId);
+      activeSessionId = '';
+      if (output) output.textContent = 'Sesja została usunięta z pamięci backendu.';
+    } catch (err) {
+      if (output) output.textContent = 'Nie udało się zakończyć sesji: ' + err.message;
+    }
   });
 }
 
