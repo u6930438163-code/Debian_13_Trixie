@@ -1,8 +1,8 @@
 export const AGENT_PROFILES = Object.freeze([
-  { id: 'aria', name: 'Aria', role: 'Modele i transport AI (root)', privileges: 'root (pełne uprawnienia administratora)' },
-  { id: 'astyria', name: 'Astyria', role: 'Interfejs i ergonomia (root)', privileges: 'root (pełne uprawnienia administratora)' },
-  { id: 'aurelius', name: 'Aurelius', role: 'Bezpieczeństwo i testy (root)', privileges: 'root (pełne uprawnienia administratora)' },
-  { id: 'alex', name: 'Alex', role: 'Architektura i integracja (root)', privileges: 'root (pełne uprawnienia administratora)' },
+  { id: 'aria', name: 'Aria', role: 'Modele i transport AI', privileges: 'Komendy kontener-root po zatwierdzeniu operatora' },
+  { id: 'astyria', name: 'Astyria', role: 'Interfejs i ergonomia', privileges: 'Komendy kontener-root po zatwierdzeniu operatora' },
+  { id: 'aurelius', name: 'Aurelius', role: 'Bezpieczeństwo i testy', privileges: 'Komendy kontener-root po zatwierdzeniu operatora' },
+  { id: 'alex', name: 'Alex', role: 'Architektura i integracja', privileges: 'Komendy kontener-root po zatwierdzeniu operatora' },
 ]);
 
 const SESSION_KEY = 'debian13-chat-session';
@@ -144,6 +144,20 @@ export function createApiClient({
     getIntegrations: () => request('integrations'),
     getTasks: () => request('tasks'),
     getAlexCapabilities: () => request('alex/capabilities'),
+    getRootCommands: () => request('admin/commands'),
+    getRootOperations: () => request('admin/operations'),
+    proposeRootOperation: (agent, commandId, reason) =>
+      post('admin/proposals', { agent, commandId, reason }),
+    approveRootOperation: (id, approvalToken) => request(
+      `admin/operations/${encodeURIComponent(id)}/approve`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Root-Approval-Token': approvalToken,
+        },
+        body: JSON.stringify({ confirmation: 'ZATWIERDZAM ROOT W KONTENERZE' }),
+      }),
+
     bridge: (message, sessionId = '', useOpenai = true) => post('bridge', { message, sessionId, useOpenai }),
     terminateBridge: (sessionId) => post('bridge/terminate', { sessionId }),
     dispatchToAlex: (taskId) => request(`tasks/${encodeURIComponent(taskId)}/dispatch`, {method: 'POST'}),
@@ -200,7 +214,7 @@ function renderAgentProfiles(list, agents = getInitialAgentStatuses()) {
     role.textContent = agent.role;
     const privilege = document.createElement('p');
     privilege.className = 'agent-privilege';
-    privilege.textContent = agent.privileges ?? 'root (pełne uprawnienia administratora)';
+    privilege.textContent = agent.privileges ?? 'Dostęp administracyjny wyłącznie po zatwierdzeniu operatora';
     const labels = agentStatusLabel(agent);
     const profile = document.createElement('p');
     profile.className = 'agent-state';
@@ -1189,6 +1203,106 @@ function bindTerminalForm() {
   });
 }
 
+function bindRootCommands() {
+  const form = document.getElementById('root-propose-form');
+  const list = document.getElementById('root-operations');
+  const status = document.getElementById('root-status');
+  const commandSelect = document.getElementById('root-command');
+  const tokenField = document.getElementById('root-approval-token');
+  if (!form || !list || !status || !commandSelect) return;
+  let commandOptionsLoaded = false;
+  let currentRefresh = false;
+  const feedback = (value) => setText('root-feedback', value);
+
+  async function refresh() {
+    if (currentRefresh) return;
+    currentRefresh = true;
+    try {
+      const [caps, history] = await Promise.all([api.getRootCommands(), api.getRootOperations()]);
+      status.textContent = !caps.enabled
+        ? 'Root wyłączony: operator nie włączył DEBIAN13_ROOT_ACTIONS_ENABLED.'
+        : !caps.rootRunnerVerified
+          ? 'Root skonfigurowany, ale proces wykonawczy nie potwierdził heartbeat. Nie można zakładać, że komendy zostaną wykonane.'
+          : 'Root-runner: rzeczywisty proces w izolowanym kontenerze potwierdził heartbeat.';
+      if (!commandOptionsLoaded && Array.isArray(caps.commands)) {
+        commandSelect.replaceChildren();
+        for (const item of caps.commands) {
+          const option = document.createElement('option');
+          option.value = item.id;
+          option.textContent = item.id;
+          commandSelect.append(option);
+        }
+        commandOptionsLoaded = true;
+      }
+      list.replaceChildren();
+      const entries = Array.isArray(history.operations) ? history.operations : [];
+      if (!entries.length) {
+        const li = document.createElement('li');
+        li.textContent = 'Brak komend root w dzienniku.';
+        list.append(li);
+      }
+      for (const item of entries) {
+        const li = document.createElement('li');
+        li.className = 'root-operation';
+        const label = document.createElement('span');
+        const summary = [item.agent, item.commandId, item.status,
+          item.exitCode !== null ? 'exit=' + item.exitCode : ''].filter(Boolean).join(' · ');
+        label.textContent = summary;
+        li.append(label);
+        if (item.output) {
+          const pre = document.createElement('pre');
+          pre.className = 'terminal-result';
+          pre.textContent = item.output;
+          li.append(pre);
+        }
+        if (item.status === 'pending_approval') {
+          const approve = document.createElement('button');
+          approve.type = 'button';
+          approve.className = 'button button-secondary';
+          approve.textContent = 'Zatwierdź ten jeden krok';
+          approve.addEventListener('click', async () => {
+            const token = tokenField.value.trim();
+            if (token.length < 32) {
+              feedback('Wpisz osobny token zatwierdzania root (minimum 32 znaki).');
+              return;
+            }
+            approve.disabled = true;
+            try {
+              const result = await api.approveRootOperation(item.id, token);
+              feedback('Zatwierdzono ' + result.id + '. Wykonanie potwierdzi dopiero log procesu.');
+              await refresh();
+            } catch (error) { feedback('Błąd zatwierdzenia: ' + error.message); }
+            finally { tokenField.value = ''; approve.disabled = false; }
+          });
+          li.append(approve);
+        }
+        list.append(li);
+      }
+    } catch (error) {
+      status.textContent = 'Root API niedostępne: ' + error.message;
+    } finally { currentRefresh = false; }
+  }
+
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const agent = document.getElementById('root-agent')?.value;
+    const command = commandSelect.value;
+    const reason = document.getElementById('root-reason')?.value.trim();
+    if (!agent || !command || !reason) return;
+    const submit = form.querySelector('button[type="submit"]');
+    if (submit) submit.disabled = true;
+    try {
+      const result = await api.proposeRootOperation(agent, command, reason);
+      feedback('Propozycja ' + result.id + ' czeka na oddzielną akceptację. Nie wykonano komendy.');
+      await refresh();
+    } catch (error) {
+      feedback('Nie udało się zgłosić operacji: ' + error.message);
+    } finally { if (submit) submit.disabled = false; }
+  });
+  document.getElementById('root-refresh')?.addEventListener('click', () => void refresh());
+  void refresh();
+}
+
 function bindBridgeForm() {
   const form = document.getElementById('bridge-form');
   const termBtn = document.getElementById('bridge-terminate');
@@ -1228,6 +1342,7 @@ if (typeof document !== 'undefined') {
   bindChatForm();
   bindTerminalForm();
   bindWorkCreateForm();
+  bindRootCommands();
   bindBridgeForm();
   renderHistory();
   document.getElementById('refresh-status')?.addEventListener('click', refreshDashboard);
