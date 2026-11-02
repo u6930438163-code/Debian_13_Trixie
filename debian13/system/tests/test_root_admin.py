@@ -11,6 +11,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import root_admin
+import mcp_server
 from server import Debian13Server
 
 OPERATOR = "test-operator-token-at-least-32-characters"
@@ -145,6 +146,25 @@ class RootApiTests(unittest.TestCase):
         self.assertNotIn(APPROVER, json.dumps(data))
         # Proposal approval alone is not evidence of root execution.
         self.assertIsNone(data["operations"][0]["startedAt"])
+
+    def test_mcp_agent_can_propose_allowlisted_root_but_not_execute_it(self):
+        request = {"jsonrpc": "2.0", "id": 7, "method": "tools/call",
+                   "params": {"name": "propose_root_command", "arguments": {
+                       "agent": "Aurelius", "command_id": "package_audit",
+                       "reason": "Inspect dpkg state before maintenance",
+                   }}}
+        with patch.dict(os.environ, {
+            "DEBIAN13_API_TOKEN": OPERATOR,
+            "DEBIAN13_SYSTEM_API_URL": "http://127.0.0.1:" + str(self.server.server_port),
+        }):
+            result = mcp_server.response(request)
+        self.assertFalse(result["result"]["isError"])
+        details = json.loads(result["result"]["content"][0]["text"])
+        self.assertEqual(details["agent"], "Aurelius")
+        self.assertTrue(details["pendingOperatorApproval"])
+        self.assertFalse(details["executionStarted"])
+        self.assertIsNone(self.server.admin_store.claim())
+        self.assertEqual(self.server.admin_store.list()["operations"][0]["status"], "pending_approval")
 
     def test_shell_strings_fail_closed(self):
         status, data = self.request("/api/v1/admin/proposals", "POST", {
