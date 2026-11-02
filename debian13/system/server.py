@@ -642,7 +642,11 @@ class SystemHandler(http.server.BaseHTTPRequestHandler):
             ]})
             return
         if self.path == "/api/v1/tasks":
-            self._send_json(200, {"tasks": self.server.work_store.list_tasks(),
+            tasks = self.server.work_store.list_tasks()
+            for task in tasks:
+                if task.get("agent") == "alex":
+                    task["alexSubmission"] = self.server.work_store.get_alex_submission(task["id"])
+            self._send_json(200, {"tasks": tasks,
                                   "storage": "sqlite", "workersRunning": 0})
             return
         if self.path == "/api/v1/events":
