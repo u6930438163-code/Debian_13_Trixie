@@ -58,6 +58,11 @@ class AdminStore:
                     started_at TEXT, completed_at TEXT,
                     exit_code INTEGER, result TEXT NOT NULL DEFAULT ''
                 )""")
+                db.execute("""CREATE TABLE IF NOT EXISTS root_runner_health(
+                    singleton INTEGER PRIMARY KEY CHECK(singleton = 1),
+                    last_seen_ts INTEGER NOT NULL,
+                    last_seen_at TEXT NOT NULL
+                )""")
             os.chmod(self.db_path, 0o600)
 
     @contextmanager
@@ -73,6 +78,32 @@ class AdminStore:
             raise
         finally:
             db.close()
+
+    def heartbeat(self):
+        with self._db() as db:
+            db.execute("""INSERT INTO root_runner_health(singleton,last_seen_ts,last_seen_at)
+                VALUES (1,?,?) ON CONFLICT(singleton) DO UPDATE SET
+                last_seen_ts=excluded.last_seen_ts,last_seen_at=excluded.last_seen_at""",
+                (int(time.time()), _utc()))
+
+    def runner_status(self):
+        with self._db() as db:
+            try:
+                row = db.execute("SELECT last_seen_ts,last_seen_at FROM root_runner_health WHERE singleton=1").fetchone()
+            except sqlite3.OperationalError:
+                row = None
+        alive = row is not None and 0 <= time.time() - row["last_seen_ts"] < 25
+        return {
+            "rootRunnerVerified": bool(alive),
+            "lastHeartbeatAt": row["last_seen_at"] if row else None,
+            "rootScope": "isolated_container_not_host",
+        }
+
+    def recover_interrupted(self):
+        with self._db() as db:
+            db.execute("""UPDATE operations SET status='unknown_after_restart',
+                completed_at=?, result='Result unknown after runner restart; manual review required.'
+                WHERE status='executing'""", (_utc(),))
 
     def propose(self, agent, command_id, reason):
         if not isinstance(agent, str) or agent not in AGENTS:
@@ -196,8 +227,13 @@ def run_approved_loop(workspace=Path("/workspace"), pause=2):
     store = AdminStore(workspace, create=False)
     if os.geteuid() != 0:
         raise SystemExit("admin_runner_requires_container_root")
+    # Interrupted root action MUST NOT be retried blindly.
+    while not store.db_path.exists():
+        time.sleep(pause)
+    store.recover_interrupted()
     while True:
         try:
+            store.heartbeat()
             job = store.claim()
             if job:
                 succeeded, exit_code, result = execute_allowlisted(job["command"], workspace)
