@@ -7,6 +7,8 @@ services:
     user: "10001:10001"
     environment:
       DEBIAN13_API_TOKEN: "${DEBIAN13_API_TOKEN:?Set DEBIAN13_API_TOKEN to a random secret of at least 32 characters}"
+      # MCP stdio launched inside this container connects to the internal API.
+      DEBIAN13_SYSTEM_API_URL: "http://127.0.0.1:8080"
       MODEL_CHAT_URL: "${MODEL_CHAT_URL:-}"
       MODEL_API_KEY: "${MODEL_API_KEY:-}"
       MODEL_NAME: "${MODEL_NAME:-}"
