@@ -163,7 +163,7 @@ def response(request: dict) -> dict | None:
         if not isinstance(params, dict):
             return {"jsonrpc": "2.0", "id": request_id, "error": {"code": -32602, "message": "Invalid tool arguments"}}
         name = params.get("name")
-        if name not in TOOLS and name not in GATEWAY_TOOLS:
+        if not isinstance(name, str) or (name not in TOOLS and name not in GATEWAY_TOOLS):
             return {"jsonrpc": "2.0", "id": request_id, "error": {"code": -32602, "message": "Unknown tool"}}
         arguments = params.get("arguments", {})
         if not isinstance(arguments, dict):
