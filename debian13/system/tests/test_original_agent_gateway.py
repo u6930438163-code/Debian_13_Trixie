@@ -41,7 +41,13 @@ class OriginalAgentGatewayTests(unittest.TestCase):
         tasks = [{"id": "abc-1", "agent": "Alex", "status": "running",
                   "title": "Existing source task"},
                  {"id": "abc-2", "agent": "Aria", "status": "queued"}]
-        with patch.object(gateway, "_request", return_value={"success": True, "tasks": tasks}) as remote:
+        def source(method, path, **kwargs):
+            if path == "/agent-tasks/workers" or path.startswith("/agent-tasks/jobs/"):
+                raise gateway.GatewayError("source_capability_not_implemented")
+            if path == "/agent-tasks":
+                return {"success": True, "tasks": tasks}
+            raise AssertionError(path)
+        with patch.object(gateway, "_request", side_effect=source):
             data = gateway.list_agents()
             alex = next(x for x in data["agents"] if x["name"] == "Alex")
             self.assertEqual(alex["tasksInRegistry"], 1)
@@ -49,19 +55,61 @@ class OriginalAgentGatewayTests(unittest.TestCase):
             self.assertFalse(alex["workerVerified"])
             self.assertFalse(alex["connected"])
             self.assertFalse(data["originalAgentExecutionVerified"])
-            remote.assert_called_once_with("GET", "/agent-tasks")
-
+            self.assertFalse(data["workerStatusEndpointReachable"])
             item = gateway.get_task_status("Alex", "abc-1")
             self.assertEqual(item["status"], "running")
             self.assertFalse(item["workerExecutionVerified"])
             self.assertEqual(item["sourceRepository"], gateway.SOURCE_REPO)
+
+    def test_authenticated_source_worker_status_is_not_fabricated(self):
+        state = {
+            "sourceRepository": gateway.SOURCE_REPO,
+            "protocolVersion": gateway.PROTOCOL_VERSION,
+            "enabled": True, "providerConfigured": True,
+            "agents": [
+                {"name": "Alex", "state": "running", "workerVerified": True,
+                 "activeTaskId": "some-task-id", "heartbeatAt": "2026-11-02T20:00:00Z"},
+                {"name": "Aria", "state": "idle", "workerVerified": False},
+                {"name": "Astyria", "state": "idle", "workerVerified": False},
+                {"name": "Aurelius", "state": "disabled", "workerVerified": False},
+            ],
+        }
+        with patch.object(gateway, "_request", return_value=state) as remote:
+            data = gateway.list_agents()
+            self.assertTrue(data["workerStatusEndpointReachable"])
+            self.assertTrue(data["originalAgentExecutionVerified"])
+            self.assertEqual([x["name"] for x in data["agents"]],
+                             ["Alex", "Aria", "Astyria", "Aurelius"])
+            self.assertEqual(data["agents"][0]["state"], "running")
+            self.assertTrue(data["agents"][0]["workerVerified"])
+            self.assertFalse(data["agents"][1]["workerVerified"])
+            remote.assert_called_once_with("GET", "/agent-tasks/workers")
+
+    def test_completed_source_job_requires_provider_response_before_verified(self):
+        result = {
+            "id": "task-1", "agent": "Alex", "status": "completed",
+            "workerExecutionVerified": True, "provider": "gemini",
+            "result": "Real saved code review", "pullRequestVerified": False,
+        }
+        with patch.object(gateway, "_request", return_value=result):
+            outcome = gateway.get_task_status("Alex", "task-1")
+        self.assertTrue(outcome["workerExecutionVerified"])
+        self.assertFalse(outcome["pullRequestVerified"])
+        self.assertEqual(outcome["result"], "Real saved code review")
+        with patch.object(gateway, "_request", return_value={**result, "result": ""}):
+            outcome = gateway.get_task_status("Alex", "task-1")
+        self.assertFalse(outcome["workerExecutionVerified"])
 
     def test_read_rejects_unknown_agent_missing_task_and_untrusted_ids(self):
         with self.assertRaisesRegex(gateway.GatewayError, "unknown_original_agent"):
             gateway.get_task_status("RandomAgent", "test")
         with self.assertRaisesRegex(gateway.GatewayError, "invalid_task_id"):
             gateway.get_task_status("Alex", "../../etc/passwd")
-        with patch.object(gateway, "_request", return_value={"success": True, "tasks": []}):
+        def source(method, path, **kwargs):
+            if path.startswith("/agent-tasks/jobs/"):
+                raise gateway.GatewayError("source_capability_not_implemented")
+            return {"success": True, "tasks": []}
+        with patch.object(gateway, "_request", side_effect=source):
             with self.assertRaisesRegex(gateway.GatewayError, "task_not_in_original_registry"):
                 gateway.get_task_status("Alex", "non-existent")
 
