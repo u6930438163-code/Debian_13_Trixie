@@ -184,6 +184,42 @@
               <button class="button button-primary" id="work-create-submit" type="submit">Zapisz do przeglądu</button>
               <p id="work-create-feedback" role="status" aria-live="polite" class="form-feedback"></p>
             </form>
+            <section class="root-admin-panel" aria-labelledby="root-commands-title">
+              <div class="section-heading">
+                <div>
+                  <p class="eyebrow">ADMINISTRACJA · WYŁĄCZNIE W IZOLOWANYM KONTENERZE</p>
+                  <h3 id="root-commands-title">Komendy root · przegląd i zatwierdzanie</h3>
+                </div>
+                <button id="root-refresh" type="button" class="button button-secondary">Odśwież</button>
+              </div>
+              <p class="work-limit-note">Model może zaproponować tylko operację z listy. Root nie dotyczy hosta, GitHub ani dostępu do sekretów. Zatwierdzenie wymaga osobnego tokenu operatora; wynik ma rzeczywisty log.</p>
+              <p id="root-status" role="status" aria-live="polite" class="form-feedback">Oczekiwanie na stan serwera root…</p>
+              <form id="root-propose-form" class="work-task-form">
+                <label for="root-agent">Agent, którego zadania dotyczy propozycja</label>
+                <select id="root-agent" required>
+                  <option value="Alex">Alex</option>
+                  <option value="Aria">Aria</option>
+                  <option value="Astyria">Astyria</option>
+                  <option value="Aurelius">Aurelius</option>
+                </select>
+                <label for="root-command">Dozwolona komenda root</label>
+                <select id="root-command" required><option value="">Pobieranie listy…</option></select>
+                <label for="root-reason">Cel i uzasadnienie</label>
+                <input id="root-reason" type="text" maxlength="350" autocomplete="off"
+                       placeholder="Np. audyt pakietów Debian 13" required />
+                <button type="submit" class="button button-secondary">Zaproponuj komendę do zatwierdzenia</button>
+              </form>
+              <div class="root-approval-group">
+                <label for="root-approval-token">Oddzielny token zatwierdzania root</label>
+                <input id="root-approval-token" type="password" autocomplete="off"
+                       placeholder="Tylko na czas zatwierdzenia · nie zapisujemy" />
+                <p class="work-limit-note">Każde zatwierdzenie wykonuje tylko wskazaną operację z białej listy. Nigdy nie wklejaj klucza do wiadomości AI.</p>
+              </div>
+              <p id="root-feedback" role="status" aria-live="polite" class="form-feedback"></p>
+              <ul id="root-operations" class="event-list" aria-label="Historia komend root">
+                <li class="empty-state">Historia root jeszcze nie została pobrana.</li>
+              </ul>
+            </section>
             <p id="alex-dispatch-state" class="work-limit-note" role="status" aria-live="polite">
               Oryginalny Alex: oczekuje na sprawdzenie możliwości wysyłania zadań.
               Przekazanie polecenia nie oznacza zakończenia pracy.
