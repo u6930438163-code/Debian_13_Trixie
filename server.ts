@@ -12,6 +12,7 @@ import { spawn, ChildProcess } from 'child_process';
 import { fileURLToPath } from 'url';
 import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
+import { hasBearerCredential, isInternalInferenceAuthorized } from './debian13/security/operator-auth.mjs';
 
 dotenv.config();
 
@@ -40,6 +41,9 @@ if (!apiToken) {
     fs.writeFileSync(tokenFile, apiToken + '\n', { mode: 0o600 });
   }
 }
+
+// Distinct ephemeral credential used only for backend-to-model inference over loopback.
+const modelBridgeToken = crypto.randomBytes(36).toString('base64url');
 
 console.log('[Debian 13] Initialized state and workspace directories.');
 console.log(`[Debian 13] Operator token active (${apiToken.length} chars).`);
@@ -71,7 +75,7 @@ function startPythonBackend() {
   // If Gemini API is available and custom model url is not set, wire loopback chat completion
   if (geminiApiKey && !process.env.MODEL_CHAT_URL) {
     env.MODEL_CHAT_URL = `http://127.0.0.1:${PORT}/v1/chat/completions`;
-    env.MODEL_API_KEY = 'internal-gemini-token';
+    env.MODEL_API_KEY = modelBridgeToken;
     env.MODEL_NAME = 'gemini-3.1-flash-lite';
     env.VISION_MODEL_NAME = 'gemini-3.1-flash-lite';
   }
@@ -143,10 +147,35 @@ function proxyToPython(req: Request, res: Response) {
 }
 
 app.use('/healthz', (req, res) => proxyToPython(req, res));
-app.use('/api/v1', (req, res) => proxyToPython(req, res));
+// The hosted UI must authenticate before receiving the backend's privileged token.
+app.use('/api/v1', proxyAuthenticated);
+
+// GPT Actions and remote MCP use authenticated API routes.
+// These routes must NOT inherit the UI's implicit internal token.
+function proxyAuthenticated(req: Request, res: Response) {
+  if (!hasBearerCredential(req.header('authorization'), apiToken)) {
+    res.status(401).json({ error: { code: 'unauthorized', message: 'Bearer token required.' } });
+    return;
+  }
+  proxyToPython(req, res);
+}
+
+for (const route of ['/v1/profiles', '/v1/integrations', '/v1/diagnostics']) {
+  app.get(route, proxyAuthenticated);
+}
+app.post('/v1/chat', proxyAuthenticated);
+app.all('/mcp', proxyAuthenticated);
+
 
 // OpenAI-compatible Chat Completions endpoint for Python server -> Gemini bridge
-app.post('/v1/chat/completions', express.json({ limit: '10mb' }), async (req: Request, res: Response): Promise<void> => {
+app.post('/v1/chat/completions', (req, res, next) => {
+  // This bridge exists for Python -> Node only, not as a public paid inference API.
+  if (!isInternalInferenceAuthorized(req.header('authorization'), modelBridgeToken, req.socket.remoteAddress)) {
+    res.status(401).json({ error: { code: 'unauthorized', message: 'Internal inference endpoint.' } });
+    return;
+  }
+  next();
+}, express.json({ limit: '10mb' }), async (req: Request, res: Response): Promise<void> => {
   if (!ai) {
     res.status(503).json({
       error: {

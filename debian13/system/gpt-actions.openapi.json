@@ -195,6 +195,50 @@
           }
         }
       }
+    },
+    "/api/v1/alex/capabilities": {
+      "get": {
+        "operationId": "getOriginalAlexHandoffStatus",
+        "summary": "Check support for safe original Alex handoff",
+        "description": "Authenticated read-only status; does not prove that a remote AI worker is running.",
+        "responses": {
+          "200": {
+            "description": "Current diagnostics",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/original-agents": {
+      "get": {
+        "operationId": "getOriginalAgentConnectionStates",
+        "summary": "Read connection states of four original agents",
+        "description": "Authenticated read-only status; does not prove that a remote AI worker is running.",
+        "responses": {
+          "200": {
+            "description": "Current diagnostics",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
     }
   }
 }

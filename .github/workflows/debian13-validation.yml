@@ -7,6 +7,11 @@ on:
       - '.github/workflows/debian13-validation.yml'
       - 'docs/DEBIAN13_AGENT_SETUP.md'
       - 'debian13/**'
+      - 'server.ts'
+      - 'package.json'
+      - '.github/workflows/debian13-codex-issue.yml'
+      - '.github/workflows/debian13-agent-task.yml'
+      - '.github/workflows/debian13-scheduled.yml'
 permissions:
   contents: read
 concurrency:
@@ -196,3 +201,20 @@ jobs:
           test "$status" = "401"
           curl --fail --silent --show-error -H "Authorization: Bearer $DEBIAN13_API_TOKEN" http://127.0.0.1:8080/v1/profiles >/dev/null
           docker compose -f debian13/system/compose.yaml exec -T debian13-system python3 /opt/debian13/system/integration_smoke.py
+
+  gateway-security:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Node gateway dependencies
+        run: npm install --no-audit --no-fund
+      - name: Type-check production Node gateway
+        run: npm run build
+      - name: Test operator authentication, hosted UI and Express gateway
+        run: node --test debian13/security/operator-auth.test.mjs debian13/ui/app-auth.test.mjs debian13/security/gateway.test.mjs

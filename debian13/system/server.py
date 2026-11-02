@@ -26,6 +26,7 @@ from pathlib import Path
 from work_store import WorkStore
 from original_agents import report as original_agents_report
 from alex_handoff import AlexHandoffError, capabilities as alex_capabilities, submit_task as submit_to_alex
+import mcp_server
 
 MAX_BODY_BYTES = 16 * 1024
 MAX_VISION_BODY_BYTES = 3 * 1024 * 1024
@@ -492,6 +493,14 @@ class SystemHandler(http.server.BaseHTTPRequestHandler):
             return
         if not self._authorize():
             return
+        if self.path == "/mcp":
+            # This stateless MCP endpoint is POST-only; GET streaming is not offered.
+            self.send_response(405)
+            self.send_header("Allow", "POST")
+            self.send_header("Content-Length", "0")
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            return
         if self.path == "/v1/profiles":
             self._send_json(200, {
                 "profiles": [
@@ -581,6 +590,26 @@ class SystemHandler(http.server.BaseHTTPRequestHandler):
             return
         request_id = str(uuid.uuid4())
         try:
+            if self.path == "/mcp":
+                # Reject browser origins to prevent DNS rebinding; clients are server-to-server.
+                if self.headers.get("Origin"):
+                    raise ApiError(403, "origin_forbidden", "Browser Origin is not allowed for MCP.")
+                content_type = self.headers.get("Content-Type", "").split(";", 1)[0].strip().lower()
+                accept = self.headers.get("Accept", "").lower()
+                if content_type != "application/json":
+                    raise ApiError(415, "invalid_content_type", "MCP requires application/json.")
+                if "application/json" not in accept or "text/event-stream" not in accept:
+                    raise ApiError(406, "invalid_accept", "MCP requires JSON and SSE in Accept.")
+                message = self._read_json()
+                result = mcp_server.response(message)
+                if result is None:
+                    self.send_response(202)
+                    self.send_header("Content-Length", "0")
+                    self.send_header("Cache-Control", "no-store")
+                    self.end_headers()
+                else:
+                    self._send_json(200, result)
+                return
             dispatch = TASK_DISPATCH_PATH.fullmatch(self.path)
             if dispatch:
                 if self.headers.get("Content-Length", "0") not in ("", "0") or self.headers.get("Transfer-Encoding"):

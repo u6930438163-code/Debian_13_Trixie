@@ -149,7 +149,7 @@ class OriginalAlexHandoffTests(unittest.TestCase):
         posted = OriginalAlexDouble.calls[0]["body"]
         self.assertEqual(posted["agent"], "Alex")
         self.assertEqual(posted["task"]["targetRepository"],
-                         "mmitek515-netizen/Debian_13")
+                         "u6930438163-code/Debian_13_Trixie")
         self.assertEqual(posted["mode"], "pull_request_proposal")
         self.assertFalse(posted["purchaseAuthorized"])
         self.assertFalse(posted["autoMerge"])

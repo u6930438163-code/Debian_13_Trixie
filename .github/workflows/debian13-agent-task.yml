@@ -22,7 +22,7 @@ jobs:
       - name: Checkout project source for grounded agent planning
         uses: actions/checkout@v4
         with:
-          ref: migration/debian13-codespaces
+          ref: main
           persist-credentials: false
       - name: Validate task and credentials
         env:

@@ -18,7 +18,7 @@ export class ApiError extends Error {
 }
 
 function apiErrorMessage(payload, status) {
-  if (status === 401) return 'Brak autoryzacji API (401). Skonfiguruj DEBIAN13_API_TOKEN wyłącznie po stronie serwera proxy.';
+  if (status === 401) return 'Brak autoryzacji API (401). Sprawdź token operatora i bezpieczny adres panelu.';
   if (status === 403) return 'API odrzuciło uprawnienia (403). Sprawdź dostęp operatora.';
   if (status === 404) return 'Backend nie udostępnia tego endpointu (404).';
   return typeof payload?.error === 'string'
@@ -26,10 +26,33 @@ function apiErrorMessage(payload, status) {
     : `Żądanie nie powiodło się (HTTP ${status}).`;
 }
 
-export function createApiClient({ fetchImpl = globalThis.fetch, baseUrl = '' } = {}) {
+export function createApiClient({
+  fetchImpl = globalThis.fetch,
+  baseUrl = '',
+  requestOperatorToken = () => typeof globalThis.prompt === 'function'
+    ? globalThis.prompt('Prywatny panel Debian 13 wymaga tokenu operatora. Podaj go tylko na zaufanej stronie HTTPS.')
+    : null,
+} = {}) {
+  // The token is kept in memory only; never put it in URL, storage or logs.
+  let operatorToken = '';
   async function fetchRequest(path, options) {
+    const call = () => {
+      const headers = { ...(options?.headers || {}) };
+      if (operatorToken) headers.Authorization = 'Bearer ' + operatorToken;
+      return fetchImpl(`${baseUrl}/api/v1/${path}`, { ...options, headers });
+    };
     try {
-      return await fetchImpl(`${baseUrl}/api/v1/${path}`, options);
+      let response = await call();
+      if (response.status === 401 && typeof requestOperatorToken === 'function') {
+        operatorToken = '';
+        const candidate = requestOperatorToken();
+        if (typeof candidate === 'string' && candidate.trim().length >= 32) {
+          operatorToken = candidate.trim();
+          response = await call();
+          if (response.status === 401) operatorToken = '';
+        }
+      }
+      return response;
     } catch (error) {
       if (error?.name === 'AbortError') throw error;
       throw new ApiError('Runtime nieosiągalny — sprawdź połączenie z API.');

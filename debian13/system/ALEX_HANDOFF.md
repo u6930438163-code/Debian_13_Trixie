@@ -79,7 +79,9 @@ konsoli ani automatycznego merge. Zlecenie pozostaje pod kontrolą
 operatora. Jeśli capabilities brakuje, **wysyłanie jest zablokowane**
 i prawdziwy Alex nie dostaje żadnego polecenia.
 
-W obecnym GitHub Issue #6 znajduje się dokładna treść żądania
+Obecny cel wszystkich propozycji PR to `u6930438163-code/Debian_13_Trixie`, nie poprzednie repo `mmitek515-netizen/Debian_13`.
+
+W historycznym GitHub Issue #6 znajduje się dokładna treść żądania
 właściciela. Nie używaj go jako zgody na zakup.
 
 ## Test bez limitu Alexa (tylko test umowy protokołu)

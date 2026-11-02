@@ -31,7 +31,7 @@ MAX_RESPONSE = 262144
 
 
 def api_base() -> str:
-    value = os.environ.get("DEBIAN13_SYSTEM_API_URL", "http://127.0.0.1:8080").rstrip("/")
+    value = os.environ.get("DEBIAN13_SYSTEM_API_URL", "http://127.0.0.1:8765").rstrip("/")
     parsed = urllib.parse.urlsplit(value)
     if (parsed.scheme not in ("http", "https")
             or not parsed.hostname or parsed.username or parsed.password
