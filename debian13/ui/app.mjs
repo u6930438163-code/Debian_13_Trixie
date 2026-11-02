@@ -334,6 +334,38 @@ function appendTranscript(kind, title, content = '') {
   text.className = 'transcript-text';
   text.textContent = content;
   entry.append(heading, text);
+  if (kind === 'user' || kind === 'assistant') {
+    // Local operator feedback only; NOT an AI-to-AI reaction.
+    const index = transcript.querySelectorAll('.transcript-entry').length;
+    const key = ['debian13-reaction-v1', activeSessionId || 'local', index, kind].join(':');
+    const controls = document.createElement('div');
+    controls.className = 'message-reactions';
+    let saved = '';
+    try { saved = localStorage.getItem(key) || ''; } catch { /* optional storage */ }
+    for (const [value, label] of [['up', '👍'], ['down', '👎']]) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'message-reaction';
+      button.textContent = label;
+      button.title = value === 'up' ? 'Oceń pozytywnie' : 'Oceń negatywnie';
+      button.setAttribute('aria-label', button.title);
+      button.setAttribute('aria-pressed', String(saved === value));
+      button.addEventListener('click', () => {
+        const next = button.getAttribute('aria-pressed') === 'true' ? '' : value;
+        for (const other of controls.querySelectorAll('.message-reaction')) {
+          other.setAttribute('aria-pressed', String(next !== '' && other === button));
+        }
+        try { if (next) localStorage.setItem(key, next); else localStorage.removeItem(key); }
+        catch { /* visual feedback remains available */ }
+      });
+      controls.append(button);
+    }
+    const note = document.createElement('span');
+    note.className = 'reaction-hint';
+    note.textContent = 'Ocena użytkownika · lokalnie';
+    controls.append(note);
+    entry.append(controls);
+  }
   transcript.append(entry);
   transcript.scrollTop = transcript.scrollHeight;
   return { entry, heading, text };
@@ -574,8 +606,18 @@ async function loadOriginalAgents() {
       fragment.append(item);
     }
     list.replaceChildren(fragment);
+    for (const agent of response.agents) {
+      const id = String(agent.id || agent.name || '').toLowerCase();
+      const statusElement = document.querySelector(`[data-tile-status="${id}"]`);
+      if (statusElement) statusElement.textContent = agent.workerVerified === true
+        ? 'Proces zweryfikowany' : response.registryReachable
+          ? 'Rejestr źródłowy' : 'Niepodłączony';
+    }
   } catch (error) {
     list.replaceChildren();
+    for (const element of document.querySelectorAll('[data-tile-status]')) {
+      element.textContent = 'API niedostępne';
+    }
     setText('original-agent-error', error.message);
   }
 }
@@ -892,12 +934,43 @@ function setCollapsedSidebar(collapsed) {
   button.title = collapsed ? 'Rozwiń panel boczny' : 'Zwiń panel boczny';
 }
 
+function syncAgentChannel() {
+  const select = document.getElementById('chat-agent');
+  const channel = select?.value || 'aria';
+  const isGroup = channel === 'wszyscy';
+  for (const tile of document.querySelectorAll('[data-agent-channel]')) {
+    tile.setAttribute('aria-pressed', String(tile.dataset.agentChannel === channel));
+  }
+  const notice = document.getElementById('group-channel-notice');
+  if (notice) notice.hidden = !isGroup;
+  const submit = document.getElementById('chat-submit');
+  if (submit) submit.disabled = isGroup || Boolean(activeChatController);
+  const name = AGENT_PROFILES.find(a => a.id === channel)?.name || channel;
+  setText('agent-channel-feedback', isGroup
+    ? 'Wszyscy · oczekiwanie na prawdziwe dwukierunkowe API'
+    : 'Kanał ' + name + ' · status połączenia w kafelku');
+  setText('channel-status', isGroup
+    ? 'Wszyscy: wysyłanie zablokowane, dopóki brak API oryginalnych agentów.'
+    : 'Wiadomości kierowane do profilu ' + name + ' przez istniejące API.');
+}
+
 function bindNavigation() {
   const menu = document.getElementById('mobile-menu');
   const backdrop = document.getElementById('sidebar-backdrop');
   const collapse = document.getElementById('sidebar-collapse');
   const sidebar = document.getElementById('sidebar');
   const media = window.matchMedia('(max-width: 760px)');
+  document.querySelectorAll('[data-agent-channel]').forEach(tile => tile.addEventListener('click', () => {
+    const select = document.getElementById('chat-agent');
+    if (select) { select.value = tile.dataset.agentChannel; syncAgentChannel(); }
+    showView('chat');
+    setMobileSidebar(false);
+    document.getElementById('chat-message')?.focus();
+  }));
+  document.getElementById('chat-agent')?.addEventListener('change', syncAgentChannel);
+  document.getElementById('new-chat-inline')?.addEventListener('click', () =>
+    document.getElementById('new-chat')?.click());
+  syncAgentChannel();
   menu?.addEventListener('click', () => setMobileSidebar(!sidebar?.classList.contains('is-open')));
   backdrop?.addEventListener('click', () => setMobileSidebar(false));
   collapse?.addEventListener('click', () => {
@@ -1035,6 +1108,10 @@ function bindChatForm() {
     const feedback = document.getElementById('chat-feedback');
     const text = message?.value.trim();
     if (!text || !agent || !feedback || activeChatController || visionBusy) return;
+    if (agent.value === 'wszyscy') {
+      feedback.textContent = 'Czat grupowy wymaga działającego, uwierzytelnionego API czterech agentów. Wiadomości nie wysłano.';
+      return;
+    }
     const file = attachment?.files?.[0] ?? null;
     if (file) {
       visionBusy = true;
@@ -1153,6 +1230,7 @@ function bindChatForm() {
       stop.disabled = false;
       stop.textContent = 'Zatrzymaj';
       await loadTasks();
+      syncAgentChannel();
     }
   });
   document.getElementById('chat-stop')?.addEventListener('click', async (event) => {
