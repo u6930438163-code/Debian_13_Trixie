@@ -28,6 +28,8 @@ from original_agents import report as original_agents_report
 from alex_handoff import AlexHandoffError, capabilities as alex_capabilities, submit_task as submit_to_alex
 import mcp_server
 import interactive_scripts as scripts
+import system_observability as observability
+from agent_monitor import AgentMonitor
 from ai_bridge import BridgeError, execute_bridge_session, terminate_session
 
 MAX_BODY_BYTES = 16 * 1024
@@ -430,7 +432,16 @@ class Debian13Server(http.server.ThreadingHTTPServer):
         self._alex_dispatch_lock = threading.Lock()
         self._rates: dict[str, tuple[float, int]] = {}
         self._rates_lock = threading.Lock()
+        self.agent_monitor = None
         super().__init__(address, SystemHandler)
+        if config.get("agent_monitor_enabled", False):
+            self.agent_monitor = AgentMonitor(
+                interval_seconds=config.get("agent_monitor_interval", 30))
+
+    def server_close(self):
+        if self.agent_monitor is not None:
+            self.agent_monitor.close()
+        super().server_close()
 
 
 class SystemHandler(http.server.BaseHTTPRequestHandler):
@@ -570,6 +581,9 @@ class SystemHandler(http.server.BaseHTTPRequestHandler):
             self.send_header("Content-Length", "0")
             self.send_header("Cache-Control", "no-store")
             self.end_headers()
+            return
+        if self.path == "/api/v1/diagnostics":
+            self._send_json(200, observability.snapshot(self.server))
             return
         if self.path == "/api/v1/scripts":
             self._send_json(200, scripts.catalog())
@@ -845,6 +859,8 @@ def load_config() -> dict:
         "model_name": os.environ.get("MODEL_NAME", ""),
         "vision_model_name": os.environ.get("VISION_MODEL_NAME", ""),
         "workspace": os.environ.get("WORKSPACE_DIR", "/workspace"),
+        "agent_monitor_enabled": os.environ.get("DEBIAN13_AGENT_MONITOR_ENABLED") == "1",
+        "agent_monitor_interval": 30,
         "host": os.environ.get("HOST", "127.0.0.1"),
         "port": int(os.environ.get("PORT", "8080")),
     }
