@@ -1832,3 +1832,32 @@ body::before {
   .agent-tile em {display:none;}
   .agent-avatar {width:25px;height:25px;flex-basis:25px;}
 }
+
+/* Live Command Center — grounded system and source-registry observations. */
+.diagnostics-view { overflow-y:auto; }
+.diagnostic-kpis {
+  display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:11px; margin:14px 0 18px;
+}
+.diagnostic-kpi {
+  min-width:0; padding:15px 14px; border-radius:14px;
+  border:1px solid rgba(160,150,223,.3);
+  background:linear-gradient(135deg,rgba(47,54,96,.48),rgba(12,20,39,.73));
+}
+.diagnostic-kpi span { display:block; font-size:11px; color:#c2cbe2; }
+.diagnostic-kpi strong { display:block; margin:11px 0 7px; font-size:clamp(19px,2.5vw,29px); color:#c4dcff; word-break:break-word; }
+.diagnostic-kpi small { display:block; line-height:1.45; font-size:10px; color:#a5aec5; }
+.diagnostic-agent-panel,.diagnostic-event-panel {
+  margin-top:15px; padding:16px; border-radius:13px;
+  border:1px solid rgba(159,163,214,.27); background:rgba(5,14,32,.6);
+}
+.diagnostic-agent-panel h3,.diagnostic-event-panel h3 { margin:0 0 10px; }
+.diagnostic-event-panel .event-list { max-height:280px; overflow-y:auto; }
+#diagnostics-agent-monitor { white-space:pre-line; overflow-wrap:anywhere; }
+@media (max-width:950px) {
+  .diagnostic-kpis { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}
+@media (max-width:420px) {
+  .diagnostic-kpis { gap:6px; }
+  .diagnostic-kpi { padding:10px; }
+  .diagnostic-kpi strong { font-size:18px; margin:8px 0 5px; }
+}
