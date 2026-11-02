@@ -103,9 +103,13 @@ w ustawieniach i z GitHubem.
   agentów, bez wymyślonych statusów.
 - `debian13/system/alex_handoff.py` — bramka przekazania zadań wymagająca
   prawdziwego źródłowego endpointu, obsługiwanej funkcji i autoryzacji.
-- `debian13/system/mcp_server.py` — tylko odczyt danych przez stdio MCP.
+- `debian13/system/mcp_server.py` — bezpieczne narzędzia MCP tylko do odczytu (stdio).
+- `debian13/system/server.py` — uwierzytelniony endpoint MCP `/mcp` (Streamable HTTP) oraz API GPT Actions.
+- `server.ts` — chronione trasowanie MCP i GPT Actions do backendu Python.
 - `.github/workflows/debian13-validation.yml` — testy na Debian 13,
   test rzeczywistej aplikacji i budowy kontenera.
+
+Konfigurację połączeń MCP, Codex, oryginalnego Alexa i GPT Actions oraz wymagane testy opisuje [instrukcja integracji](debian13/system/INTEGRATIONS.md). Sam import repozytorium nie oznacza aktywnego MCP ani podłączonego modelu AI.
 
 **Pełne uruchomienie samodzielnego systemu operacyjnego** (boot/ISO,
 sterowniki, instalacja i cały cykl agenta) nadal wymaga odrębnych etapów
