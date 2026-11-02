@@ -27,6 +27,7 @@ API_PATHS = {
     ("POST", "/api/v1/terminal"),
     ("POST", "/api/v1/terminal/stream"),
     ("GET", "/api/v1/scripts"),
+    ("GET", "/api/v1/diagnostics"),
     ("POST", "/api/v1/scripts/start"),
     ("POST", "/api/v1/scripts/respond"),
     ("POST", "/api/v1/scripts/cancel"),
