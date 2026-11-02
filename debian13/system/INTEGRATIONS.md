@@ -63,6 +63,22 @@ publish a Codespaces port or the private API directly. A configured
 MCP client is still required. Local stdio by itself is not a ChatGPT
 cloud connector.
 
+### Hosted Node gateway and private console
+
+The Node/AI Studio entrypoint `server.ts` requires the operator Bearer credential
+for **all** `/api/v1/*` routes as well as `/v1/*` and `/mcp`. The hosted
+browser UI asks the operator for this token after HTTP 401; it keeps the
+credential only in memory, never in the URL, localStorage, or logs. Load the
+panel only from the trusted HTTPS origin before providing any credential.
+When running `bash debian13/start-local.sh` in a private Codespace, the
+Python UI proxy uses server-side credentials and requires no browser prompt.
+
+The Gemini inference bridge `/v1/chat/completions` is **not** a public model
+API: only the local Python backend can access it using a separate random,
+process-only Bearer token plus a loopback socket. The normal operator token
+cannot authorize model-bridge calls. Keep the hosting ingress private or
+behind HTTPS with access controls; do not expose the service as an open proxy.
+
 ## 2. GPT Actions
 
 The schema is `debian13/system/gpt-actions.openapi.json`. It exposes
