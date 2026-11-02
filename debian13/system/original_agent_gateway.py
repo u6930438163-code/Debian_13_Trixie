@@ -70,7 +70,17 @@ def _source_base() -> str:
 def _request(method: str, path: str, payload: dict | None = None, idempotency_key: str = "") -> dict:
     base, token = _source_base(), _source_token()
     if method not in ("GET", "POST") or path not in (
-        "/agent-tasks", "/agent-tasks/capabilities", "/agent-tasks/messages", "/agent-tasks/submit"):
+        "/agent-tasks", "/agent-tasks/workers", "/agent-tasks/capabilities",
+        "/agent-tasks/messages", "/agent-tasks/submit"):
+        if not (method == "GET" and path.startswith("/agent-tasks/jobs/")
+                and _SAFE_ID.fullmatch(path.rsplit("/", 1)[-1])):
+            raise GatewayError("unsupported_source_operation")
+    if method == "GET" and path.startswith("/agent-tasks/jobs/"):
+        if not _SAFE_ID.fullmatch(path.removeprefix("/agent-tasks/jobs/")):
+            raise GatewayError("unsupported_source_operation")
+    elif method == "GET" and path not in ("/agent-tasks", "/agent-tasks/workers", "/agent-tasks/capabilities"):
+        raise GatewayError("unsupported_source_operation")
+    elif method == "POST" and path not in ("/agent-tasks/messages", "/agent-tasks/submit")
         raise GatewayError("unsupported_source_operation")
     headers = {"Accept": "application/json", "Authorization": "Bearer " + token}
     data = None
@@ -125,47 +135,106 @@ def _registry() -> list:
     return data["tasks"]
 
 
+def _verified_worker_registry():
+    """Use only an authenticated source status response, never profile names."""
+    state = _request("GET", "/agent-tasks/workers")
+    if (state.get("sourceRepository") != SOURCE_REPO
+            or state.get("protocolVersion") != PROTOCOL_VERSION
+            or not isinstance(state.get("agents"), list)):
+        raise GatewayError("invalid_worker_status")
+    by_name = {}
+    for item in state["agents"]:
+        if not isinstance(item, dict) or item.get("name") not in AGENTS:
+            raise GatewayError("invalid_worker_status")
+        if item["name"] in by_name:
+            raise GatewayError("invalid_worker_status")
+        if item.get("state") not in ("disabled", "provider_unavailable", "idle", "running"):
+            raise GatewayError("invalid_worker_status")
+        by_name[item["name"]] = item
+    if set(by_name) != AGENTS:
+        raise GatewayError("invalid_worker_status")
+    return state, by_name
+
+
 def list_agents() -> dict:
-    """Real source registry observations. Profiles are not worker instances."""
-    tasks = _registry()
+    """Read real, authenticated source worker status if it exists.
+
+    On old source API deployments report registry-only facts without
+    claiming workers are running. No simulated or duplicate agents.
+    """
+    try:
+        state, by_name = _verified_worker_registry()
+    except GatewayError as exc:
+        if exc.code != "source_capability_not_implemented":
+            raise
+        tasks = _registry()
+        agents = []
+        for name, (slug, role) in ORIGINAL_AGENTS.items():
+            matching = [task for task in tasks if isinstance(task, dict) and task.get("agent") == name]
+            agents.append({
+                "id": slug, "name": name, "role": role,
+                "tasksInRegistry": len(matching),
+                "runningEntriesInRegistry": sum(task.get("status") == "running" for task in matching),
+                "workerVerified": False, "connected": False, "state": "unverified",
+            })
+        return {"sourceRepository": SOURCE_REPO, "registryReachable": True,
+                "workerStatusEndpointReachable": False,
+                "originalAgentExecutionVerified": False, "agents": agents}
     agents = []
     for name, (slug, role) in ORIGINAL_AGENTS.items():
-        matching = [task for task in tasks if isinstance(task, dict) and task.get("agent") == name]
+        worker = by_name[name]
+        running = worker.get("state") == "running" and worker.get("workerVerified") is True
         agents.append({
             "id": slug, "name": name, "role": role,
-            "tasksInRegistry": len(matching),
-            "runningEntriesInRegistry": sum(task.get("status") == "running" for task in matching),
-            "workerVerified": False, "connected": False,
+            "connected": state.get("enabled") is True and state.get("providerConfigured") is True,
+            "state": "running" if running else worker["state"],
+            "workerVerified": running,
+            "heartbeatAt": worker.get("heartbeatAt") if running else None,
+            "activeTaskId": worker.get("activeTaskId") if running else None,
+            "queuedTasks": worker.get("queued", 0) if isinstance(worker.get("queued"), int) else 0,
+            "completedTasks": worker.get("completed", 0) if isinstance(worker.get("completed"), int) else 0,
+            "failedTasks": worker.get("failed", 0) if isinstance(worker.get("failed"), int) else 0,
         })
-    return {
-        "sourceRepository": SOURCE_REPO,
-        "registryReachable": True,
-        "originalAgentExecutionVerified": False,
-        "agents": agents,
-    }
+    return {"sourceRepository": SOURCE_REPO, "registryReachable": True,
+            "workerStatusEndpointReachable": True, "providerConfigured": state.get("providerConfigured") is True,
+            "originalAgentExecutionVerified": any(item["workerVerified"] for item in agents),
+            "agents": agents}
 
 
 def get_task_status(agent: str, task_id: str) -> dict:
     agent = _agent(agent)
     if not isinstance(task_id, str) or not _SAFE_ID.fullmatch(task_id):
         raise GatewayError("invalid_task_id")
-    # Source /api/agent-tasks is the existing real registry, not an agent worker.
-    for task in _registry():
-        if (isinstance(task, dict) and task.get("agent") == agent
-                and str(task.get("id", "")) == task_id):
-            status = task.get("status")
-            if status not in ALLOWED_STATUSES:
-                raise GatewayError("invalid_remote_task_status")
-            return {
-                "agent": agent,
-                "taskId": task_id,
-                "status": status,
-                "title": str(task.get("title", ""))[:MAX_TITLE_CHARS],
-                "registryEntryFound": True,
-                "workerExecutionVerified": False,
-                "sourceRepository": SOURCE_REPO,
-            }
-    raise GatewayError("task_not_in_original_registry")
+    try:
+        task = _request("GET", "/agent-tasks/jobs/" + task_id)
+    except GatewayError as exc:
+        if exc.code != "source_capability_not_implemented":
+            raise
+        # Old registry is not proof the corresponding worker executed the task.
+        for task in _registry():
+            if (isinstance(task, dict) and task.get("agent") == agent
+                    and str(task.get("id", "")) == task_id):
+                status = task.get("status")
+                if status not in ALLOWED_STATUSES:
+                    raise GatewayError("invalid_remote_task_status")
+                return {"agent": agent, "taskId": task_id, "status": status,
+                        "title": str(task.get("title", ""))[:MAX_TITLE_CHARS],
+                        "registryEntryFound": True,
+                        "workerExecutionVerified": False, "sourceRepository": SOURCE_REPO}
+        raise GatewayError("task_not_in_original_registry")
+    if task.get("id") != task_id or task.get("agent") != agent or task.get("status") not in ALLOWED_STATUSES:
+        raise GatewayError("invalid_remote_task_status")
+    executed = (task.get("status") == "completed" and
+                task.get("workerExecutionVerified") is True and
+                isinstance(task.get("provider"), str) and bool(task["provider"]) and
+                isinstance(task.get("result"), str) and bool(task["result"]))
+    return {
+        "agent": agent, "taskId": task_id, "status": task["status"],
+        "title": str(task.get("title", ""))[:MAX_TITLE_CHARS],
+        "workerExecutionVerified": executed,
+        "result": task.get("result", "")[:8000] if executed else "",
+        "pullRequestVerified": False, "sourceRepository": SOURCE_REPO,
+    }
 
 
 def send_message(agent: str, message: str) -> dict:
