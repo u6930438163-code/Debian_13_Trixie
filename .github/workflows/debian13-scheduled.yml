@@ -16,7 +16,7 @@ jobs:
       - name: Checkout Debian 13 migration branch
         uses: actions/checkout@v4
         with:
-          ref: migration/debian13-codespaces
+          ref: main
           persist-credentials: false
       - name: Test standalone API on host
         run: python3 -m unittest discover -s debian13/system/tests -p 'test_*.py' -v
