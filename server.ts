@@ -145,6 +145,25 @@ function proxyToPython(req: Request, res: Response) {
 app.use('/healthz', (req, res) => proxyToPython(req, res));
 app.use('/api/v1', (req, res) => proxyToPython(req, res));
 
+// GPT Actions and remote MCP use authenticated API routes.
+// These routes must NOT inherit the UI's implicit internal token.
+function proxyAuthenticated(req: Request, res: Response) {
+  const supplied = Buffer.from(req.header('authorization') || '', 'utf8');
+  const expected = Buffer.from('Bearer ' + apiToken, 'utf8');
+  if (supplied.length !== expected.length || !crypto.timingSafeEqual(supplied, expected)) {
+    res.status(401).json({ error: { code: 'unauthorized', message: 'Bearer token required.' } });
+    return;
+  }
+  proxyToPython(req, res);
+}
+
+for (const route of ['/v1/profiles', '/v1/integrations', '/v1/diagnostics']) {
+  app.get(route, proxyAuthenticated);
+}
+app.post('/v1/chat', proxyAuthenticated);
+app.all('/mcp', proxyAuthenticated);
+
+
 // OpenAI-compatible Chat Completions endpoint for Python server -> Gemini bridge
 app.post('/v1/chat/completions', express.json({ limit: '10mb' }), async (req: Request, res: Response): Promise<void> => {
   if (!ai) {
