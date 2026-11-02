@@ -60,9 +60,16 @@ class OriginalAgentsHttpTests(unittest.TestCase):
         self.assertTrue({"list_agents", "send_message", "create_task", "get_task_status"} <= actual)
 
     def test_authenticated_list_agents_uses_real_source_registry_adapter(self):
-        response = {"success": True, "tasks": [
-            {"id": "source-1", "agent": "Alex", "status": "queued"}
-        ]}
+        response = {
+            "sourceRepository": "u6930438163-code/AI_Studio_BastillaOS",
+            "protocolVersion": 1, "enabled": True, "providerConfigured": True,
+            "agents": [
+                {"name": "Alex", "state": "idle", "workerVerified": False},
+                {"name": "Aria", "state": "idle", "workerVerified": False},
+                {"name": "Astyria", "state": "idle", "workerVerified": False},
+                {"name": "Aurelius", "state": "idle", "workerVerified": False},
+            ],
+        }
         with patch("original_agent_gateway._request", return_value=response) as mocked:
             status, reply = self.post({
                 "jsonrpc": "2.0", "id": 3, "method": "tools/call",
@@ -74,7 +81,7 @@ class OriginalAgentsHttpTests(unittest.TestCase):
         self.assertTrue(info["registryReachable"])
         self.assertFalse(info["originalAgentExecutionVerified"])
         self.assertEqual(len(info["agents"]), 4)
-        mocked.assert_called_once_with("GET", "/agent-tasks")
+        mocked.assert_called_once_with("GET", "/agent-tasks/workers")
 
     def test_write_tools_never_bypass_operator_config(self):
         request = {
