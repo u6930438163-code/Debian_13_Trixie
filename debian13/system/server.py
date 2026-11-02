@@ -24,6 +24,7 @@ import uuid
 from pathlib import Path
 
 from work_store import WorkStore
+from root_admin import AdminStore, AdminError, COMMANDS as ADMIN_COMMANDS
 from original_agents import report as original_agents_report
 from alex_handoff import AlexHandoffError, capabilities as alex_capabilities, submit_task as submit_to_alex
 import mcp_server
@@ -45,6 +46,7 @@ TASK_UUID = r"[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f
 TASK_DETAIL_PATH = re.compile(r"^/api/v1/tasks/(" + TASK_UUID + r")$")
 TASK_CANCEL_PATH = re.compile(r"^/api/v1/tasks/(" + TASK_UUID + r")/cancel$")
 TASK_DISPATCH_PATH = re.compile(r"^/api/v1/tasks/(" + TASK_UUID + r")/dispatch$")
+ADMIN_APPROVE_PATH = re.compile(r"^/api/v1/admin/operations/(" + TASK_UUID + r")/approve$")
 WORK_KINDS = frozenset({"development", "bugfix", "audit", "research"})
 
 PROFILES = {
@@ -380,6 +382,7 @@ class Debian13Server(http.server.ThreadingHTTPServer):
         self.workspace = Path(config["workspace"]).resolve()
         self.workspace.mkdir(parents=True, exist_ok=True)
         self.work_store = WorkStore(self.workspace)
+        self.admin_store = AdminStore(self.workspace)
         self._alex_dispatch_lock = threading.Lock()
         self._rates: dict[str, tuple[float, int]] = {}
         self._rates_lock = threading.Lock()
@@ -555,6 +558,21 @@ class SystemHandler(http.server.BaseHTTPRequestHandler):
                 for key, profile in PROFILES.items()
             ]})
             return
+        if self.path == "/api/v1/admin/commands":
+            self._send_json(200, {
+                "enabled": self.server.config.get("root_actions_enabled", False),
+                "runsAs": "root_in_isolated_container_only",
+                "commands": [{"id": command_id, "requiresApproval": True}
+                             for command_id in ADMIN_COMMANDS],
+                "operatorTokenConfigured": bool(
+                    self.server.config.get("root_approval_token", "")),
+                "rootRunnerVerified": False,
+                "note": "The isolated root runner must be deployed separately; an approval does not prove execution.",
+            })
+            return
+        if self.path == "/api/v1/admin/operations":
+            self._send_json(200, self.server.admin_store.list())
+            return
         if self.path == "/api/v1/tasks":
             self._send_json(200, {"tasks": self.server.work_store.list_tasks(),
                                   "storage": "sqlite", "workersRunning": 0})
@@ -647,7 +665,35 @@ class SystemHandler(http.server.BaseHTTPRequestHandler):
                     raise ApiError(404, "task_not_found", "Task not found.")
                 self._send_json(200, {"task": task})
                 return
+            approval = ADMIN_APPROVE_PATH.fullmatch(self.path)
+            if approval:
+                if not self.server.config.get("root_actions_enabled", False):
+                    raise ApiError(503, "root_actions_disabled", "Container-root actions have not been enabled.")
+                stored = self.server.config.get("root_approval_token", "")
+                supplied = self.headers.get("X-Root-Approval-Token", "")
+                if len(stored) < 32 or not hmac.compare_digest(stored, supplied):
+                    raise ApiError(403, "root_operator_approval_required",
+                                   "A separate operator approval credential is required.")
+                data = self._read_json()
+                if set(data) != {"confirmation"}:
+                    raise ApiError(400, "invalid_root_approval", "Exact confirmation required.")
+                try:
+                    approved = self.server.admin_store.approve(approval.group(1), data["confirmation"])
+                except AdminError as exc:
+                    raise ApiError(exc.status, exc.code, exc.code) from None
+                self._send_json(202, approved)
+                return
             data = self._read_json(MAX_VISION_BODY_BYTES if self.path == "/v1/vision" else MAX_BODY_BYTES)
+            if self.path == "/api/v1/admin/proposals":
+                if set(data) != {"agent", "commandId", "reason"}:
+                    raise ApiError(400, "invalid_admin_proposal", "Provide agent, commandId and reason.")
+                try:
+                    proposal = self.server.admin_store.propose(
+                        data["agent"], data["commandId"], data["reason"])
+                except AdminError as exc:
+                    raise ApiError(exc.status, exc.code, exc.code) from None
+                self._send_json(201, proposal)
+                return
             if self.path == "/api/v1/bridge":
                 if set(data) - {"sessionId", "message", "useOpenai"}:
                     raise ApiError(400, "invalid_bridge_request", "Unsupported bridge request fields.")
@@ -741,6 +787,8 @@ def load_config() -> dict:
         "model_name": os.environ.get("MODEL_NAME", ""),
         "vision_model_name": os.environ.get("VISION_MODEL_NAME", ""),
         "workspace": os.environ.get("WORKSPACE_DIR", "/workspace"),
+        "root_actions_enabled": os.environ.get("DEBIAN13_ROOT_ACTIONS_ENABLED") == "1",
+        "root_approval_token": os.environ.get("DEBIAN13_ROOT_APPROVAL_TOKEN", ""),
         "host": os.environ.get("HOST", "127.0.0.1"),
         "port": int(os.environ.get("PORT", "8080")),
     }
