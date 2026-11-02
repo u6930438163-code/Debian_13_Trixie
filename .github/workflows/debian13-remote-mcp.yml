@@ -1,0 +1,30 @@
+name: Debian 13 remote MCP connection check
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify-remote:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Check independently configured remote target and token
+        env:
+          DEBIAN13_REMOTE_BASE_URL: ${{ vars.DEBIAN13_REMOTE_BASE_URL }}
+          DEBIAN13_REMOTE_API_TOKEN: ${{ secrets.DEBIAN13_REMOTE_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "$DEBIAN13_REMOTE_BASE_URL" ] || [ -z "$DEBIAN13_REMOTE_API_TOKEN" ]; then
+            echo "::error::Configure repository variable DEBIAN13_REMOTE_BASE_URL and secret DEBIAN13_REMOTE_API_TOKEN."
+            exit 1
+          fi
+          python3 debian13/system/remote_mcp_probe.py
+      - name: Record scope of result
+        if: success()
+        run: |
+          echo '## Debian 13 remote MCP connectivity' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Verified HTTPS service diagnostics and authenticated MCP initialize, tools/list and read-only tool/call.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'This does not prove ChatGPT client installation, agent execution, or future uptime.' >> "$GITHUB_STEP_SUMMARY"
