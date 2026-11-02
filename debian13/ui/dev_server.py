@@ -18,6 +18,9 @@ API_PATHS = {
     ("GET", "/api/v1/original-agents"),
     ("GET", "/api/v1/integrations"),
     ("GET", "/api/v1/alex/capabilities"),
+    ("GET", "/api/v1/admin/commands"),
+    ("GET", "/api/v1/admin/operations"),
+    ("POST", "/api/v1/admin/proposals"),
     ("GET", "/api/v1/tasks"),
     ("POST", "/api/v1/tasks"),
     ("GET", "/api/v1/events"),
@@ -36,6 +39,9 @@ API_TASK_CANCEL_PATH = re.compile(
 )
 API_TASK_DISPATCH_PATH = re.compile(
     r"/api/v1/tasks/[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/dispatch",
+)
+API_ADMIN_APPROVE_PATH = re.compile(
+    r"/api/v1/admin/operations/[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/approve",
 )
 API_SESSION_PATH = re.compile(
     r"/api/v1/sessions/[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/messages",
@@ -74,7 +80,10 @@ class UiHandler(SimpleHTTPRequestHandler):
         if (self.command, path) not in API_PATHS and not (
             self.command == "GET" and (API_SESSION_PATH.fullmatch(path) or API_TASK_PATH.fullmatch(path))
         ) and not (
-            self.command == "POST" and (API_TASK_CANCEL_PATH.fullmatch(path) or API_TASK_DISPATCH_PATH.fullmatch(path))
+            self.command == "POST" and (
+                API_TASK_CANCEL_PATH.fullmatch(path)
+                or API_TASK_DISPATCH_PATH.fullmatch(path)
+                or API_ADMIN_APPROVE_PATH.fullmatch(path))
         ):
             self._send_error_json(404, "Nie znaleziono endpointu API.")
             return
@@ -121,6 +130,22 @@ class UiHandler(SimpleHTTPRequestHandler):
                 headers["Authorization"] = "Bearer " + token
             if self.command == "POST" and body is not None:
                 headers["Content-Type"] = "application/json"
+            if API_ADMIN_APPROVE_PATH.fullmatch(path):
+                # A second explicit operator secret is never stored by the UI.
+                # Cross-origin approval requests must not be proxied.
+                origin = self.headers.get("Origin", "")
+                if origin:
+                    origin_url = urlsplit(origin)
+                    if (origin_url.scheme not in ("http", "https")
+                            or origin_url.netloc != self.headers.get("Host", "")):
+                        self._send_error_json(403, "Root approval requires same-origin request.")
+                        return
+                root_token = self.headers.get("X-Root-Approval-Token", "")
+                if not (32 <= len(root_token) <= 512) or any(
+                        ord(char) < 33 or ord(char) > 126 for char in root_token):
+                    self._send_error_json(403, "Separate operator root approval token required.")
+                    return
+                headers["X-Root-Approval-Token"] = root_token
             upstream_path = {"/api/v1/integrations": "/v1/integrations",
                              "/api/v1/vision": "/v1/vision"}.get(path, path)
             connection.request(self.command, upstream_path, body=body, headers=headers)
