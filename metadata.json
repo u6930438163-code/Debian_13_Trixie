@@ -1,0 +1,6 @@
+{
+  "name": "Debian 13 · Console",
+  "description": "Niezależna konsola systemowa i projekt OS Debian 13 z API, trwałym rejestrem zadań Work, terminalem i profilami agentów.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
