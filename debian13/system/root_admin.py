@@ -8,6 +8,7 @@ Execution requires the isolated root-runner container to be explicitly enabled.
 from __future__ import annotations
 
 import os
+from contextlib import contextmanager
 import sqlite3
 import stat
 import subprocess
@@ -59,11 +60,19 @@ class AdminStore:
                 )""")
             os.chmod(self.db_path, 0o600)
 
+    @contextmanager
     def _db(self):
         db = sqlite3.connect(self.db_path, timeout=8)
         db.row_factory = sqlite3.Row
         db.execute("PRAGMA busy_timeout=8000")
-        return db
+        try:
+            yield db
+            db.commit()
+        except BaseException:
+            db.rollback()
+            raise
+        finally:
+            db.close()
 
     def propose(self, agent, command_id, reason):
         if not isinstance(agent, str) or agent not in AGENTS:
