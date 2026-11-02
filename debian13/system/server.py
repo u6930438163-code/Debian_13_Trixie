@@ -27,6 +27,7 @@ from work_store import WorkStore
 from original_agents import report as original_agents_report
 from alex_handoff import AlexHandoffError, capabilities as alex_capabilities, submit_task as submit_to_alex
 import mcp_server
+from ai_bridge import BridgeError, execute_bridge_session, terminate_session
 
 MAX_BODY_BYTES = 16 * 1024
 MAX_VISION_BODY_BYTES = 3 * 1024 * 1024
@@ -647,6 +648,23 @@ class SystemHandler(http.server.BaseHTTPRequestHandler):
                 self._send_json(200, {"task": task})
                 return
             data = self._read_json(MAX_VISION_BODY_BYTES if self.path == "/v1/vision" else MAX_BODY_BYTES)
+            if self.path == "/api/v1/bridge":
+                if set(data) - {"sessionId", "message", "useOpenai"}:
+                    raise ApiError(400, "invalid_bridge_request", "Unsupported bridge request fields.")
+                try:
+                    result = execute_bridge_session(
+                        data.get("sessionId", ""), data.get("message"),
+                        data.get("useOpenai", True))
+                except BridgeError as exc:
+                    raise ApiError(exc.status, exc.code, "AI Bridge request did not complete.") from None
+                self._send_json(200, result)
+                return
+            if self.path == "/api/v1/bridge/terminate":
+                session_id = data.get("sessionId")
+                if set(data) != {"sessionId"} or not isinstance(session_id, str) or not re.fullmatch(TASK_UUID, session_id):
+                    raise ApiError(400, "invalid_session", "Provide a valid bridge session ID.")
+                self._send_json(200, {"terminated": terminate_session(session_id)})
+                return
             if self.path == "/api/v1/tasks":
                 if set(data) != {"agent", "kind", "title", "description"}:
                     raise ApiError(400, "invalid_task", "Required: agent, kind, title, description.")
