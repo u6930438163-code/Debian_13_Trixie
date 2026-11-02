@@ -34,3 +34,21 @@ test('cancelling prompt does not send a guessed token or retry', async () => {
   await assert.rejects(api.getStatus(), (err) => err instanceof ApiError && err.status === 401);
   assert.equal(calls, 1);
 });
+
+test('UI bridge sends both provider choice and session termination to the authenticated API', async () => {
+  const seen = [];
+  const api = createApiClient({
+    fetchImpl: async (url, options) => {
+      seen.push({ url, method: options.method, body: JSON.parse(options.body) });
+      return reply(200, { sessionId: 'test-session', provider: 'gemini', response: 'ok', terminated: true });
+    },
+  });
+  const bridged = await api.bridge('hello', '', false);
+  assert.equal(bridged.provider, 'gemini');
+  await api.terminateBridge('test-session');
+  assert.deepEqual(seen, [
+    { url: '/api/v1/bridge', method: 'POST',
+      body: { message: 'hello', sessionId: '', useOpenai: false } },
+    { url: '/api/v1/bridge/terminate', method: 'POST', body: { sessionId: 'test-session' } },
+  ]);
+});
