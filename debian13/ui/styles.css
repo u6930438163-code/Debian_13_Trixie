@@ -961,6 +961,61 @@ h2 {
   color: #d3a968;
 }
 
+.mcp-chatgpt-card {
+  margin: 14px 0 18px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: rgba(16, 25, 39, 0.9);
+  border: 1px solid var(--border);
+}
+
+.mcp-chatgpt-card h4 {
+  margin: 0 0 6px;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.mcp-chatgpt-card p {
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.mcp-config-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mcp-config-item {
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.mcp-config-item strong {
+  display: block;
+  color: #e2e8f0;
+  margin-bottom: 2px;
+}
+
+.mcp-config-item code {
+  display: inline-block;
+  padding: 4px 8px;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(145, 161, 181, 0.2);
+  border-radius: 6px;
+  font-family: monospace;
+  font-size: 11px;
+  color: #38bdf8;
+  word-break: break-all;
+}
+
+.mcp-config-item a {
+  color: #38bdf8;
+  text-decoration: underline;
+}
+
 .footer {
   display: flex;
   justify-content: space-between;
@@ -975,10 +1030,23 @@ h2 {
 }
 
 @media (max-width: 768px) {
+  html,
+  body {
+    height: auto !important;
+    min-height: 100% !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
   .app-shell {
     width: 100%;
     max-width: 100%;
-    padding: 0 12px 24px;
+    height: auto !important;
+    min-height: 100vh;
+    min-height: 100dvh;
+    overflow: visible !important;
+    padding: 0 10px 100px;
     box-sizing: border-box;
   }
 
@@ -986,10 +1054,10 @@ h2 {
     position: sticky;
     top: 0;
     z-index: 30;
-    background: rgba(10, 16, 28, 0.94);
+    background: rgba(10, 16, 28, 0.96);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
-    margin: 0 -12px 8px;
+    margin: 0 -10px 8px;
     padding: 10px 12px;
     border-radius: 0;
     border-top: none;
@@ -1057,7 +1125,15 @@ h2 {
   .app-layout[data-collapsed="true"] {
     grid-template-columns: minmax(0, 1fr);
     gap: 0;
-    padding-top: 4px;
+    height: auto !important;
+    overflow: visible !important;
+    padding-top: 2px;
+  }
+
+  .main-content {
+    height: auto !important;
+    overflow: visible !important;
+    min-height: auto;
   }
 
   /* Mobile Slide-in Navigation Drawer */
@@ -1141,40 +1217,38 @@ h2 {
     border-radius: 10px;
   }
 
-  /* View Header & Segmented Tab Controls */
+  /* Compact View Header on Mobile to preserve vertical space */
   .view-intro {
     align-items: flex-start;
     flex-direction: column;
-    gap: 8px;
-    padding-bottom: 12px;
+    gap: 4px;
+    padding-bottom: 6px;
   }
 
   .view-intro .eyebrow {
-    font-size: 11px;
-    letter-spacing: 0.06em;
+    display: none;
   }
 
   .view-intro h1 {
-    font-size: 1.45rem;
+    font-size: 1.18rem;
     line-height: 1.25;
+    margin: 2px 0;
   }
 
   .view-intro > div:first-child > p:last-child {
-    font-size: 12px;
-    line-height: 1.4;
-    color: var(--text-muted);
+    display: none;
   }
 
   .view-switch {
     display: flex;
     width: 100%;
     max-width: 100%;
-    margin-top: 6px;
+    margin-top: 4px;
     gap: 4px;
-    padding: 4px;
+    padding: 3px;
     background: rgba(13, 21, 33, 0.85);
     border: 1px solid var(--border);
-    border-radius: 12px;
+    border-radius: 10px;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
@@ -1191,7 +1265,7 @@ h2 {
     padding: 6px 10px;
     font-size: 12.5px;
     font-weight: 600;
-    border-radius: 8px;
+    border-radius: 7px;
     text-align: center;
     white-space: nowrap;
     display: inline-flex;
@@ -1201,31 +1275,60 @@ h2 {
 
   /* Workspace Views on Mobile */
   .workspace-view {
-    padding: 14px;
+    height: auto !important;
+    overflow: visible !important;
+    padding: 12px;
     border-radius: 14px;
   }
 
   /* Chat View */
   .chat-view {
-    min-height: 220px;
+    height: auto !important;
+    overflow: visible !important;
+    display: flex;
+    flex-direction: column;
     gap: 12px;
   }
 
   .transcript {
-    padding: 12px;
     min-height: 220px;
-    max-height: calc(100vh - 350px);
-    overflow-y: auto;
+    max-height: 46vh;
+    height: auto !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
+    padding: 12px;
     border-radius: 12px;
+    background: #090f18;
+    border: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .empty-state {
+    font-size: 13px;
+    line-height: 1.5;
+    padding: 6px 4px;
+  }
+
+  .composer {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
   }
 
   .composer textarea {
     font-size: 16px; /* Prevents auto-zoom on mobile browsers */
-    padding: 12px;
-    min-height: 64px;
-    border-radius: 12px;
+    padding: 10px 12px;
+    min-height: 52px;
+    max-height: 120px;
+    border-radius: 10px;
     line-height: 1.4;
+    width: 100%;
+    box-sizing: border-box;
+    resize: vertical;
   }
 
   .form-footer {
@@ -1234,14 +1337,16 @@ h2 {
     align-items: center;
     justify-content: space-between;
     gap: 8px;
-    margin-top: 6px;
+    width: 100%;
+    margin-top: 4px;
   }
 
   .form-feedback {
-    font-size: 12px;
+    font-size: 11.5px;
     line-height: 1.35;
     flex: 1 1 100%;
-    order: 2;
+    order: 3;
+    margin-top: 2px;
   }
 
   .button {
@@ -1252,11 +1357,23 @@ h2 {
     border-radius: 10px;
   }
 
-  /* Work View */
-  .work-task-form {
-    padding: 14px;
-    border-radius: 14px;
-    gap: 10px;
+  .button#chat-submit {
+    min-height: 44px;
+    padding: 0 20px;
+    font-size: 14px;
+    font-weight: 700;
+    background: var(--accent);
+    color: #08101a;
+    border-radius: 10px;
+    order: 2;
+    margin-left: auto;
+    flex-shrink: 0;
+  }
+
+  .vision-attachment {
+    order: 1;
+    margin: 0;
+    gap: 8px;
   }
 
   .work-task-form input,

@@ -254,6 +254,11 @@ function renderRuntimeStatus(status) {
   setText('application-status', application);
   setText('os-status', `${distribution} · ${boot}`);
   setText('model-status', modelStatusLabel(status.model));
+  const ollama = status.ollama;
+  const ollamaText = ollama?.running
+    ? `Działa (${ollama.version}) · ${ollama.active_model || 'qwen2.5:0.5b'} (aktywny)`
+    : 'Usługa Ollama niedostępna lokalnie';
+  setText('ollama-status', ollamaText);
   setText('task-storage-status', status.task_state ?? 'Stan pamięci zadań nieznany');
   setText('status-error', '');
   connectionState('connected', 'API dostępne');
@@ -575,6 +580,21 @@ async function loadIntegrations() {
     setText('integration-error', '');
   } catch (error) {
     setText('integration-error', error.message);
+  }
+
+  try {
+    const mcpInfo = await api.get('mcp-info');
+    if (mcpInfo) {
+      setText('mcp-public-healthz', mcpInfo.healthzUrl || '/healthz');
+      setText('mcp-public-endpoint', mcpInfo.mcpUrl || '/mcp');
+      setText('mcp-bearer-token', mcpInfo.tokenMasked || '******** (chroniony w sekretach serwera)');
+      const openApiEl = document.getElementById('mcp-openapi-url');
+      if (openApiEl && mcpInfo.openApiUrl) {
+        openApiEl.textContent = mcpInfo.openApiUrl;
+      }
+    }
+  } catch {
+    setText('mcp-bearer-token', '******** (wymaga autoryzacji sesji)');
   }
 }
 
@@ -1167,12 +1187,40 @@ function bindTerminalForm() {
   });
 }
 
+function bindBridgeForm() {
+  const form = document.getElementById('bridge-form');
+  const termBtn = document.getElementById('bridge-terminate');
+  if (!form) return;
+  let activeSessionId = '';
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const input = document.getElementById('bridge-message');
+    const output = document.getElementById('bridge-output');
+    const msg = input?.value.trim();
+    if (!msg || !output) return;
+    output.textContent = 'Wysyłanie zapytania przez AI Bridge (Gemini/OpenAI + MCP)…';
+    try {
+      const res = await api.post('bridge', { sessionId: activeSessionId, message: msg, useOpenai: true });
+      activeSessionId = res.sessionId;
+      output.textContent = `[Sesja: ${res.sessionId.slice(0, 8)} | Provider: ${res.provider}]\n\nOdpowiedź:\n${res.response}\n\n[MCP Diagnostics Status: ${res.mcpToolResult?.content?.[0]?.text ? 'Zaliczony' : 'Brak'}]`;
+    } catch (err) {
+      output.textContent = 'Błąd Bridge: ' + err.message;
+    }
+  });
+  termBtn?.addEventListener('click', () => {
+    activeSessionId = '';
+    const output = document.getElementById('bridge-output');
+    if (output) output.textContent = 'Sesja została zresetowana.';
+  });
+}
+
 if (typeof document !== 'undefined') {
   renderAgentProfiles(document.getElementById('agent-list'));
   bindNavigation();
   bindChatForm();
   bindTerminalForm();
   bindWorkCreateForm();
+  bindBridgeForm();
   renderHistory();
   document.getElementById('refresh-status')?.addEventListener('click', refreshDashboard);
   document.getElementById('refresh-tasks')?.addEventListener('click', refreshWork);

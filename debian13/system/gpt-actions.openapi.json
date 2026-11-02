@@ -7,8 +7,12 @@
   },
   "servers": [
     {
-      "url": "https://debian13.example.com",
-      "description": "REPLACE with your own HTTPS domain before importing"
+      "url": "https://ais-pre-gsa33tltmvd67ewcnhan5u-873947482948.europe-west2.run.app",
+      "description": "Debian 13 Live Application URL"
+    },
+    {
+      "url": "http://127.0.0.1:3000",
+      "description": "Debian 13 Local Development Server"
     }
   ],
   "security": [
