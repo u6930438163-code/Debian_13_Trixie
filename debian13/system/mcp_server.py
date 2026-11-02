@@ -14,6 +14,7 @@ import urllib.parse
 import urllib.request
 
 from alex_bridge import read_existing_alex
+import original_agent_gateway as agent_gateway
 
 PROTOCOL_VERSION = "2025-11-25"
 TOOLS = {
@@ -27,6 +28,56 @@ TOOLS = {
     "alex_existing_tasks": (
         "Read the ORIGINAL owner's Alex task statuses only; never create or modify tasks.", "alex:tasks"),
 }
+# Keep stable legacy tools and append explicit gateway capabilities with typed arguments.
+GATEWAY_TOOLS = {
+    "list_agents": {
+        "description": "Read the original four agent registry; no claims about live workers.",
+        "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
+        "readOnly": True,
+    },
+    "send_message": {
+        "description": "Send a message ONLY to the owner's original AI Studio agent when source explicitly advertises a compatible endpoint; disabled by default.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "agent": {"type": "string", "enum": ["Alex", "Aria", "Astyria", "Aurelius"]},
+                "message": {"type": "string", "minLength": 1, "maxLength": 2000},
+            },
+            "required": ["agent", "message"],
+            "additionalProperties": False,
+        },
+        "readOnly": False,
+    },
+    "create_task": {
+        "description": "Submit a PR-proposal task to original AI Studio agent only with configured opt-in and verified source capability. No automatic merge or admin operations.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "agent": {"type": "string", "enum": ["Alex", "Aria", "Astyria", "Aurelius"]},
+                "title": {"type": "string", "minLength": 1, "maxLength": 120},
+                "description": {"type": "string", "minLength": 1, "maxLength": 2000},
+                "kind": {"type": "string", "enum": ["development", "bugfix", "audit", "research"]},
+            },
+            "required": ["agent", "title", "description"],
+            "additionalProperties": False,
+        },
+        "readOnly": False,
+    },
+    "get_task_status": {
+        "description": "Read the status of an exact agent task ID in the owner's original registry; status alone does not prove the worker executed.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "agent": {"type": "string", "enum": ["Alex", "Aria", "Astyria", "Aurelius"]},
+                "task_id": {"type": "string", "minLength": 1, "maxLength": 128},
+            },
+            "required": ["agent", "task_id"],
+            "additionalProperties": False,
+        },
+        "readOnly": True,
+    },
+}
+
 MAX_RESPONSE = 262144
 
 
@@ -93,21 +144,57 @@ def response(request: dict) -> dict | None:
                 "annotations": {"readOnlyHint": True, "destructiveHint": False},
             }
             for name, (description, _) in TOOLS.items()
+        ] + [
+            {
+                "name": name,
+                "description": details["description"],
+                "inputSchema": details["inputSchema"],
+                "annotations": {
+                    "readOnlyHint": details["readOnly"],
+                    "destructiveHint": False,
+                    "idempotentHint": details["readOnly"],
+                    "openWorldHint": not details["readOnly"],
+                },
+            }
+            for name, details in GATEWAY_TOOLS.items()
         ]}
     elif method == "tools/call":
         params = request.get("params")
-        if not isinstance(params, dict) or params.get("name") not in TOOLS:
+        if not isinstance(params, dict):
+            return {"jsonrpc": "2.0", "id": request_id, "error": {"code": -32602, "message": "Invalid tool arguments"}}
+        name = params.get("name")
+        if name not in TOOLS and name not in GATEWAY_TOOLS:
             return {"jsonrpc": "2.0", "id": request_id, "error": {"code": -32602, "message": "Unknown tool"}}
-        if params.get("arguments", {}) != {}:
-            return {"jsonrpc": "2.0", "id": request_id, "error": {"code": -32602, "message": "No tool arguments are supported"}}
+        arguments = params.get("arguments", {})
+        if not isinstance(arguments, dict):
+            return {"jsonrpc": "2.0", "id": request_id, "error": {"code": -32602, "message": "Invalid arguments"}}
+        schema = (GATEWAY_TOOLS[name]["inputSchema"] if name in GATEWAY_TOOLS
+                  else {"required": [], "properties": {}})
+        if (set(arguments) - set(schema.get("properties", {}))
+                or any(field not in arguments for field in schema.get("required", []))):
+            return {"jsonrpc": "2.0", "id": request_id, "error": {"code": -32602, "message": "Invalid tool arguments"}}
         try:
-            path = TOOLS[params["name"]][1]
-            value = (read_existing_alex(params["name"])
-                     if path.startswith("alex:") else read_api(path))
+            if name in GATEWAY_TOOLS:
+                if name == "list_agents":
+                    value = agent_gateway.list_agents()
+                elif name == "send_message":
+                    value = agent_gateway.send_message(arguments["agent"], arguments["message"])
+                elif name == "create_task":
+                    value = agent_gateway.create_task(
+                        arguments["agent"], arguments["title"], arguments["description"],
+                        arguments.get("kind", "development"))
+                else:
+                    value = agent_gateway.get_task_status(arguments["agent"], arguments["task_id"])
+            else:
+                path = TOOLS[name][1]
+                value = (read_existing_alex(name)
+                         if path.startswith("alex:") else read_api(path))
             result = {"content": [{"type": "text", "text": json.dumps(value, ensure_ascii=False)}], "isError": False}
-        except (ValueError, OSError, urllib.error.URLError, json.JSONDecodeError) as exc:
-            # Do not echo URLs, bearer credentials, response bodies, or internals.
-            result = {"content": [{"type": "text", "text": "The configured Debian 13 or existing Alex API is unavailable or invalid."}], "isError": True}
+        except agent_gateway.GatewayError as exc:
+            # Sanitized machine code; never surface remote response bodies or credentials.
+            result = {"content": [{"type": "text", "text": exc.code}], "isError": True}
+        except (ValueError, OSError, urllib.error.URLError, json.JSONDecodeError, KeyError, TypeError):
+            result = {"content": [{"type": "text", "text": "The configured Debian 13 or original agent API is unavailable or invalid."}], "isError": True}
     else:
         return {"jsonrpc": "2.0", "id": request_id, "error": {"code": -32601, "message": "Method not found"}}
     return {"jsonrpc": "2.0", "id": request_id, "result": result}
