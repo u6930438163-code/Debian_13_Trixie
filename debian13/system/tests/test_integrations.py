@@ -2,6 +2,7 @@
 import http.client
 import json
 import os
+import subprocess
 import sys
 import tempfile
 import threading
@@ -76,6 +77,68 @@ class IntegrationTests(unittest.TestCase):
         self.assertEqual(len(payload["profiles"]), 4)
         self.assertTrue(all(p["active"] is False for p in payload["profiles"]))
 
+    def test_stdio_mcp_is_reachable_as_a_separate_process(self):
+        commands = [
+            {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}},
+            {"jsonrpc": "2.0", "id": 2, "method": "tools/list"},
+            {"jsonrpc": "2.0", "id": 3, "method": "tools/call",
+             "params": {"name": "debian13_diagnostics", "arguments": {}}},
+        ]
+        env = dict(os.environ, DEBIAN13_API_TOKEN=TOKEN,
+                   DEBIAN13_SYSTEM_API_URL=f"http://127.0.0.1:{self.api.server_port}")
+        process = subprocess.run(
+            [sys.executable, str(SYSTEM / "mcp_server.py")],
+            input="".join(json.dumps(command) + "\n" for command in commands),
+            capture_output=True, text=True, timeout=10, env=env, check=True)
+        replies = [json.loads(line) for line in process.stdout.splitlines()]
+        self.assertEqual([r["id"] for r in replies], [1, 2, 3])
+        self.assertFalse(replies[2]["result"]["isError"])
+        report = json.loads(replies[2]["result"]["content"][0]["text"])
+        self.assertEqual(report["service"], "debian13-system")
+        self.assertNotIn(TOKEN, process.stdout)
+
+    def test_http_mcp_auth_transport_and_readonly_diagnostics(self):
+        base_headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json, text/event-stream",
+        }
+        init = {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}}
+
+        def call(message, headers=None, method="POST"):
+            connection = http.client.HTTPConnection(*self.api.server_address, timeout=5)
+            try:
+                connection.request(method, "/mcp",
+                                   body=json.dumps(message) if method == "POST" else None,
+                                   headers=headers or base_headers)
+                reply = connection.getresponse()
+                body = reply.read()
+                return reply.status, json.loads(body) if body else None
+            finally:
+                connection.close()
+
+        self.assertEqual(call(init)[0], 401)
+        authed = dict(base_headers, Authorization="Bearer " + TOKEN)
+        self.assertEqual(call(init, dict(authed, Origin="https://evil.example"))[0], 403)
+        self.assertEqual(call(init, authed, method="GET")[0], 405)
+        status, data = call(init, authed)
+        self.assertEqual(status, 200)
+        self.assertEqual(data["result"]["serverInfo"]["name"], "debian13-readonly")
+        status, data = call({"jsonrpc": "2.0", "method": "notifications/initialized"}, authed)
+        self.assertEqual((status, data), (202, None))
+
+        with patch.dict(os.environ, {
+            "DEBIAN13_SYSTEM_API_URL": f"http://127.0.0.1:{self.api.server_port}",
+            "DEBIAN13_API_TOKEN": TOKEN,
+        }):
+            status, reply = call(
+                {"jsonrpc": "2.0", "id": 3, "method": "tools/call",
+                 "params": {"name": "debian13_diagnostics", "arguments": {}}}, authed)
+        self.assertEqual(status, 200)
+        self.assertFalse(reply["result"]["isError"])
+        self.assertEqual(json.loads(reply["result"]["content"][0]["text"])["service"],
+                         "debian13-system")
+        self.assertNotIn(TOKEN, json.dumps(reply))
+
     def test_mcp_rejects_unknown_and_mutating_tools(self):
         result = mcp_server.response({
             "jsonrpc": "2.0", "id": 1, "method": "tools/call",
@@ -96,7 +159,8 @@ class IntegrationTests(unittest.TestCase):
     def test_gpt_actions_schema_documents_existing_routes_only(self):
         schema = json.loads((SYSTEM / "gpt-actions.openapi.json").read_text(encoding="utf-8"))
         self.assertEqual(schema["openapi"], "3.0.3")
-        for route in ("/v1/profiles", "/v1/diagnostics", "/v1/chat", "/v1/integrations"):
+        for route in ("/v1/profiles", "/v1/diagnostics", "/v1/chat", "/v1/integrations",
+                      "/api/v1/alex/capabilities", "/api/v1/original-agents"):
             self.assertIn(route, schema["paths"])
         self.assertEqual(schema["security"], [{"bearerAuth": []}])
         self.assertTrue(schema["paths"]["/v1/chat"]["post"]["x-openai-isConsequential"])
