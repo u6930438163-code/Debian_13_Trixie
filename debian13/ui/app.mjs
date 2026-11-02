@@ -21,9 +21,11 @@ function apiErrorMessage(payload, status) {
   if (status === 401) return 'Brak autoryzacji API (401). Sprawdź token operatora i bezpieczny adres panelu.';
   if (status === 403) return 'API odrzuciło uprawnienia (403). Sprawdź dostęp operatora.';
   if (status === 404) return 'Backend nie udostępnia tego endpointu (404).';
-  return typeof payload?.error === 'string'
-    ? payload.error
-    : `Żądanie nie powiodło się (HTTP ${status}).`;
+  if (typeof payload?.error === 'string') return payload.error;
+  if (typeof payload?.error?.message === 'string' && payload.error.message.length <= 500) {
+    return payload.error.message;
+  }
+  return `Żądanie nie powiodło się (HTTP ${status}).`;
 }
 
 export function createApiClient({
@@ -435,7 +437,13 @@ function renderTasks(tasks) {
       reconnect.setAttribute('aria-label', `Pobierz status zadania ${task.id}`);
       reconnect.addEventListener('click', () => void refreshTaskStatus(task.id, reconnect));
       actions.append(reconnect);
-      if (task.agent === 'alex' && task.status === 'queued') {
+      if (task.agent === 'alex' && task.alexSubmission) {
+        const receipt = document.createElement('span');
+        receipt.className = 'task-state';
+        receipt.textContent = 'Przekazane serwerowi Alexa · praca AI niepotwierdzona';
+        actions.append(receipt);
+      }
+      if (task.agent === 'alex' && task.status === 'queued' && !task.alexSubmission) {
         const dispatch = document.createElement('button');
         dispatch.type = 'button';
         dispatch.className = 'task-action task-dispatch';
@@ -445,7 +453,7 @@ function renderTasks(tasks) {
         dispatch.addEventListener('click', () => void dispatchWorkToAlex(task.id, dispatch));
         actions.append(dispatch);
       }
-      if (['queued', 'running'].includes(task.status)) {
+      if (task.status === 'queued' && !task.alexSubmission) {
         const cancel = document.createElement('button');
         cancel.type = 'button';
         cancel.className = 'task-action task-cancel';
@@ -465,7 +473,7 @@ function renderTasks(tasks) {
     fragment.append(empty);
   }
   list.replaceChildren(fragment);
-  setText('tasks-count', `${tasks.length} zadań · trwały zapis SQLite, bez uruchomionych workerów`);
+  setText('tasks-count', `${tasks.length} zadań · zapis SQLite · brak potwierdzonej pracy workerów`);
   setText('tasks-error', '');
 }
 
@@ -552,6 +560,8 @@ function renderHistory(activeId = '') {
 
 const api = createApiClient();
 let alexDispatchSupported = false;
+let cachedWorkTasks = [];
+let workRefreshPending = false;
 let activeSessionId = '';
 let activeChatController = null;
 let activeChatTaskId = '';
@@ -703,9 +713,11 @@ async function loadTasks() {
   try {
     const payload = await api.getTasks();
     if (!Array.isArray(payload.tasks)) throw new ApiError('Nieprawidłowy format listy zadań.');
+    cachedWorkTasks = payload.tasks;
     renderTasks(payload.tasks);
     return null;
   } catch (error) {
+    cachedWorkTasks = [];
     setText('tasks-count', 'Zadania niedostępne');
     setText('tasks-error', error.message);
     const list = document.getElementById('task-list');
@@ -744,12 +756,13 @@ async function refreshAlexCapabilities() {
     const state = response.alex;
     alexDispatchSupported = state?.configured === true && state?.supported === true;
     setText('alex-dispatch-state', alexDispatchSupported
-      ? 'Oryginalny Alex udostępnia protokół przekazania zadania. Nie potwierdzono jednak pracy modelu AI.'
-      : 'Oryginalny Alex nie udostępnia obecnie bezpiecznego wysyłania zadań. Przycisk przekazania jest zablokowany.');
+      ? 'Oryginalny Alex: protokół przyjęcia zadań dostępny. Wykonanie przez AI wymaga niezależnego potwierdzenia.'
+      : 'Oryginalny Alex: przekazywanie zadań niedostępne. Można nadal tworzyć, przeglądać i anulować lokalne zadania.');
+    return { checked: true, supported: alexDispatchSupported };
   } catch (error) {
-    setText('alex-dispatch-state', 'Nie można sprawdzić połączenia z oryginalnym Alexem: ' + error.message);
+    setText('alex-dispatch-state', 'Nie udało się sprawdzić oryginalnego Alexa: ' + error.message);
+    return { checked: false, supported: false };
   }
-  return alexDispatchSupported;
 }
 
 async function dispatchWorkToAlex(taskId, button) {
@@ -776,31 +789,43 @@ async function dispatchWorkToAlex(taskId, button) {
 }
 
 async function refreshWork() {
+  if (workRefreshPending) return false;
+  workRefreshPending = true;
   const button = document.getElementById('refresh-tasks');
-  if (button?.disabled) return;
-  if (button) {
-    button.disabled = true;
-    button.textContent = 'Łączenie…';
+  if (button) { button.disabled = true; button.textContent = 'Odświeżanie…'; }
+  setText('work-connection-state', 'Weryfikuję zadania, zdarzenia i połączenie z Alexem…');
+  try {
+    const [tasksError, eventsError, alexState] = await Promise.all([
+      loadTasks(), loadEvents(), refreshAlexCapabilities(),
+    ]);
+    // First list render may have happened before the capability response.
+    // Repaint from memory, do not issue a duplicate backend request.
+    if (!tasksError) renderTasks(cachedWorkTasks);
+    const error = tasksError || eventsError;
+    const label = error
+      ? error.status === 401
+        ? 'Work: brak autoryzacji (401). Sprawdź token operatora w konfiguracji API.'
+        : error.status === 403
+          ? 'Work: dostęp odrzucony (403).'
+          : error.status === 404
+            ? 'Work: wymagany endpoint nie istnieje w tym backendzie.'
+            : 'Work: brak pełnego połączenia z API. Szczegóły w komunikatach zadań i zdarzeń.'
+      : alexState.supported
+        ? 'Work: zadania i zdarzenia działają; oryginalny Alex przyjmuje zlecenia (praca AI niepotwierdzona).'
+        : alexState.checked
+          ? 'Work: zadania i zdarzenia działają. Zlecanie pracy oryginalnemu Alexowi jest niedostępne.'
+          : 'Work: zadania i zdarzenia działają. Połączenia z oryginalnym Alexem nie udało się zweryfikować.';
+    setText('work-connection-state', label);
+    if (button) button.textContent = error ? 'Ponów połączenie' : 'Odśwież';
+    return !error;
+  } catch (error) {
+    setText('work-connection-state', 'Work: błąd odświeżania: ' + error.message);
+    if (button) button.textContent = 'Ponów połączenie';
+    return false;
+  } finally {
+    workRefreshPending = false;
+    if (button) button.disabled = false;
   }
-  setText('work-connection-state', 'Ponowne łączenie z API…');
-  const [tasksError, eventsError] = await Promise.all([loadTasks(), loadEvents(), refreshAlexCapabilities()]);
-  // The buttons were initially rendered before reading actual remote capabilities.
-  if (!tasksError) await loadTasks();
-  const error = tasksError ?? eventsError;
-  setText('work-connection-state', error
-    ? error.status === 401
-      ? 'Brak autoryzacji — skonfiguruj DEBIAN13_API_TOKEN po stronie serwera proxy.'
-      : error.status === 403
-        ? 'Dostęp do Work został odrzucony przez API.'
-        : error.status === 404
-          ? 'Ten backend nie udostępnia części funkcji Work.'
-          : 'Połączenie z Work niedostępne. Użyj „Ponów połączenie”.'
-    : 'Połączono z API. Zadania i zdarzenia odświeżone.');
-  if (button) {
-    button.textContent = error ? 'Ponów połączenie' : 'Odśwież';
-    button.disabled = false;
-  }
-  return !error;
 }
 
 async function refreshTaskStatus(taskId, button) {
@@ -816,6 +841,11 @@ async function refreshTaskStatus(taskId, button) {
       status.textContent = payload.task.status;
       status.className = `task-state task-${payload.task.status}`;
     }
+    if (payload.alexSubmission) {
+      payload.task.alexSubmission = payload.alexSubmission;
+    }
+    cachedWorkTasks = cachedWorkTasks.map(task => task.id === taskId ? payload.task : task);
+    renderTasks(cachedWorkTasks);
     setText('work-connection-state', `Status zadania pobrany z API: ${payload.task.status}.`);
     setText('tasks-error', '');
   } catch (error) {
