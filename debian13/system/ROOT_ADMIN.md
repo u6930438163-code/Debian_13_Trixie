@@ -74,6 +74,14 @@ status/output, and verify the `rootRunnerVerified` heartbeat.
   `{"confirmation":"ZATWIERDZAM ROOT W KONTENERZE"}`, plus separate
   request header `X-Root-Approval-Token`.
 
+The existing authenticated MCP endpoint also advertises the narrowly typed
+`propose_root_command(agent, command_id, reason)` tool. It only creates a
+`pending_approval` proposal through the same API; it **cannot** approve,
+execute or bypass the root runner's restrictions. The original AI Studio
+agent must be connected as an MCP client or the operator may submit the
+proposal on its behalf using Work. Merely listing this tool does not
+mean the original AI can invoke it.
+
 No API endpoint takes arbitrary shell commands. The operator bearer
 is required for **all** of these endpoints. The root approval header
 is additionally required for the consequential approval endpoint.
