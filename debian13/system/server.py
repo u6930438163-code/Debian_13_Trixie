@@ -25,6 +25,7 @@ from pathlib import Path
 
 from work_store import WorkStore
 from root_admin import AdminStore, AdminError, COMMANDS as ADMIN_COMMANDS
+from original_agent_gateway import list_agents as original_worker_status, GatewayError
 from original_agents import report as original_agents_report
 from alex_handoff import AlexHandoffError, capabilities as alex_capabilities, submit_task as submit_to_alex
 import mcp_server
@@ -543,20 +544,30 @@ class SystemHandler(http.server.BaseHTTPRequestHandler):
                     "status": "configured" if report["providerConfigured"] else "not_configured",
                     "inference": "unverified",
                 },
-                "task_state": "Brak uruchomionych workerów",
+                "task_state": "Stan workerów dostępny przez /api/v1/original-agents; brak lokalnych workerów",
             })
             return
-        if self.path == "/api/v1/original-agents":
-            self._send_json(200, original_agents_report())
-            return
-        if self.path == "/api/v1/agents":
-            self._send_json(200, {"agents": [
-                {"id": key, "name": profile["name"], "role": profile["role"],
-                 "privileges": profile.get("privileges", "root (pełne uprawnienia administratora)"),
-                 "access_level": profile.get("access_level", "root"),
-                 "status": "profile_configured", "worker": "not_running"}
-                for key, profile in PROFILES.items()
-            ]})
+        if self.path in ("/api/v1/original-agents", "/api/v1/agents"):
+            try:
+                source = original_worker_status()
+            except (GatewayError, ValueError, OSError):
+                source = original_agents_report()
+            if self.path == "/api/v1/original-agents":
+                self._send_json(200, source)
+            else:
+                known = {agent["id"]: agent for agent in source["agents"]}
+                self._send_json(200, {"agents": [
+                    {
+                        "id": key, "name": profile["name"], "role": profile["role"],
+                        "privileges": "Container-root via reviewed operation only",
+                        "access_level": "operator_approval_required",
+                        "status": "profile_configured",
+                        "worker": known.get(key, {}).get("state", "unverified"),
+                        "workerVerified": known.get(key, {}).get("workerVerified", False),
+                    }
+                    for key, profile in PROFILES.items()
+                ], "sourceRepository": source.get("sourceRepository"),
+                   "sourceWorkerStatusVerified": source.get("workerStatusEndpointReachable", False)})
             return
         if self.path == "/api/v1/admin/commands":
             self._send_json(200, {
@@ -575,7 +586,8 @@ class SystemHandler(http.server.BaseHTTPRequestHandler):
             return
         if self.path == "/api/v1/tasks":
             self._send_json(200, {"tasks": self.server.work_store.list_tasks(),
-                                  "storage": "sqlite", "workersRunning": 0})
+                                  "storage": "sqlite", "workersRunning": 0,
+                                  "localWorkerExecution": False})
             return
         if self.path == "/api/v1/events":
             self._send_json(200, {"events": self.server.work_store.list_events(),
