@@ -137,6 +137,56 @@ export function createApiClient({
     if (buffer.trim()) dispatch(buffer);
   }
 
+  async function terminalStream(command, onEvent, signal) {
+    const response = await fetchRequest('terminal/stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ command }),
+      signal,
+    });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => null);
+      throw new ApiError(apiErrorMessage(payload, response.status), response.status);
+    }
+    if (!response.body || !response.headers.get('content-type')?.includes('text/event-stream')) {
+      throw new ApiError('Brak strumienia danych terminala.', response.status);
+    }
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let completed = false;
+    const dispatch = (frame) => {
+      let event = '';
+      let payload = null;
+      for (const line of frame.split(/\r?\n/)) {
+        if (line.startsWith('event:')) event = line.slice(6).trim();
+        if (line.startsWith('data:')) {
+          try { payload = JSON.parse(line.slice(5).trim()); }
+          catch { throw new ApiError('Nieprawidłowe zdarzenie terminala.'); }
+        }
+      }
+      if (!payload) return;
+      if (event === 'done' || event === 'error') completed = true;
+      onEvent({ event, payload });
+    };
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        buffer += decoder.decode(value, { stream: !done });
+        let separator;
+        while ((separator = /\r?\n\r?\n/.exec(buffer))) {
+          dispatch(buffer.slice(0, separator.index));
+          buffer = buffer.slice(separator.index + separator[0].length);
+        }
+        if (done) break;
+      }
+      if (buffer.trim()) dispatch(buffer);
+      if (!completed) throw new ApiError('Strumień terminala przerwany przed potwierdzeniem zakończenia.');
+    } finally {
+      reader.releaseLock();
+    }
+  }
+
   return Object.freeze({
     getStatus: () => request('status'),
     getAgents: () => request('agents'),
@@ -155,6 +205,11 @@ export function createApiClient({
     chatStream,
     vision: (agent, message, image) => post('vision', { profile: agent, message, image }),
     terminal: (command) => post('terminal', { command }),
+    terminalStream,
+    listScripts: () => request('scripts'),
+    startScript: (scriptId) => post('scripts/start', { scriptId }),
+    respondScript: (sessionId, answer) => post('scripts/respond', { sessionId, answer }),
+    cancelScript: (sessionId) => post('scripts/cancel', { sessionId }),
   });
 }
 
