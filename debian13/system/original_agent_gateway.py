@@ -80,7 +80,7 @@ def _request(method: str, path: str, payload: dict | None = None, idempotency_ke
             raise GatewayError("unsupported_source_operation")
     elif method == "GET" and path not in ("/agent-tasks", "/agent-tasks/workers", "/agent-tasks/capabilities"):
         raise GatewayError("unsupported_source_operation")
-    elif method == "POST" and path not in ("/agent-tasks/messages", "/agent-tasks/submit")
+    elif method == "POST" and path not in ("/agent-tasks/messages", "/agent-tasks/submit"):
         raise GatewayError("unsupported_source_operation")
     headers = {"Accept": "application/json", "Authorization": "Bearer " + token}
     data = None
