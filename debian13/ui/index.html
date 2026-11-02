@@ -55,6 +55,9 @@
             <button class="nav-button" type="button" data-view="work" aria-label="Work">
               <span class="nav-icon" aria-hidden="true">▤</span><span class="nav-label">Work</span>
             </button>
+            <button class="nav-button" type="button" data-view="diagnostics" aria-label="Command Center — diagnostyka">
+              <span class="nav-icon" aria-hidden="true">✚</span><span class="nav-label">Diagnostyka</span>
+            </button>
             <button class="nav-button" type="button" data-view="terminal" aria-label="Terminal">
               <span class="nav-icon" aria-hidden="true">›_</span><span class="nav-label">Terminal</span>
             </button>
@@ -100,6 +103,7 @@
             <div class="view-switch" role="group" aria-label="Widok pracy">
               <button class="view-switch-button is-active" type="button" data-view="chat" aria-pressed="true">Czat</button>
               <button class="view-switch-button" type="button" data-view="work" aria-pressed="false">Work</button>
+              <button class="view-switch-button" type="button" data-view="diagnostics" aria-pressed="false">Diagnostyka</button>
               <button class="view-switch-button" type="button" data-view="terminal" aria-pressed="false">Terminal</button>
               <button class="view-switch-button" type="button" data-view="settings" aria-pressed="false">Ustawienia</button>
             </div>
@@ -221,6 +225,31 @@
               <ul id="event-list" class="event-list" aria-live="polite">
                 <li class="empty-state">Pobieranie zdarzeń…</li>
               </ul>
+            </section>
+          </section>
+
+          <section id="diagnostics-view" class="workspace-view diagnostics-view" aria-labelledby="diagnostics-title" hidden>
+            <div class="section-heading">
+              <div><p class="eyebrow">COMMAND CENTER · DANE Z RZECZYWISTEGO RUNTIME</p><h2 id="diagnostics-title">Diagnostyka systemu i agentów AI</h2></div>
+              <button id="diagnostics-refresh" type="button" class="button button-secondary">Odśwież dane</button>
+            </div>
+            <p class="work-limit-note">Wskaźniki dotyczą procesu i środowiska Debiana 13. Load average to nie procent CPU; wpis w rejestrze zadań nie dowodzi uruchomienia oryginalnego agenta.</p>
+            <p id="diagnostics-feedback" class="form-feedback" role="status" aria-live="polite">Łączenie z diagnostyką…</p>
+            <div class="diagnostic-kpis" role="group" aria-label="Podstawowe parametry">
+              <div class="diagnostic-kpi"><span>CPU · load 1m</span><strong id="diagnostics-cpu">—</strong><small id="diagnostics-cpu-note">Brak pomiaru</small></div>
+              <div class="diagnostic-kpi"><span>RAM</span><strong id="diagnostics-ram">—</strong><small>Rzeczywista pamięć środowiska</small></div>
+              <div class="diagnostic-kpi"><span>Dysk workspace</span><strong id="diagnostics-disk">—</strong><small>Przestrzeń zajęta / dostępna</small></div>
+              <div class="diagnostic-kpi"><span>Zadania Work</span><strong id="diagnostics-tasks">—</strong><small>Oczekujące · bez samoczynnego wykonywania</small></div>
+            </div>
+            <div class="diagnostic-agent-panel">
+              <h3>Praca AI w tle — prawdziwy status</h3>
+              <p id="diagnostics-agent-monitor" class="work-limit-note">Brak potwierdzonej aktywności oryginalnych agentów.</p>
+              <button id="diagnose-alex" class="button button-primary" type="button">Przygotuj diagnozę dla Alexa</button>
+              <p class="work-limit-note">Przycisk przygotowuje zadanie Work do przeglądu. Nie wykonuje automatycznego root, zakupów ani zdalnych poleceń.</p>
+            </div>
+            <section class="diagnostic-event-panel" aria-labelledby="diagnostics-events-title">
+              <h3 id="diagnostics-events-title">Ostatnie zdarzenia zadań z SQLite</h3>
+              <ul id="diagnostics-events" class="event-list" aria-live="polite"><li class="empty-state">Oczekiwanie na odczyt…</li></ul>
             </section>
           </section>
 
