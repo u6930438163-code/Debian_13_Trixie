@@ -577,8 +577,8 @@ class SystemHandler(http.server.BaseHTTPRequestHandler):
                              for command_id in ADMIN_COMMANDS],
                 "operatorTokenConfigured": bool(
                     self.server.config.get("root_approval_token", "")),
-                "rootRunnerVerified": False,
-                "note": "The isolated root runner must be deployed separately; an approval does not prove execution.",
+                **self.server.admin_store.runner_status(),
+                "note": "Only a fresh isolated root-runner heartbeat verifies readiness. Approval does not prove execution.",
             })
             return
         if self.path == "/api/v1/admin/operations":
