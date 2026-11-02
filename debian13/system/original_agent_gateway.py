@@ -14,8 +14,8 @@ import urllib.error
 import urllib.request
 import uuid
 
-from alex_bridge import SOURCE_REPO, NoRedirect, existing_api_base, fetch_registry
-from original_agents import ORIGINAL_AGENTS, report as original_agents_report
+from alex_bridge import SOURCE_REPO, NoRedirect, existing_api_base
+from original_agents import ORIGINAL_AGENTS
 
 TARGET_REPO = "u6930438163-code/Debian_13_Trixie"
 MAX_RESPONSE_BYTES = 65536
@@ -70,7 +70,7 @@ def _source_base() -> str:
 def _request(method: str, path: str, payload: dict | None = None, idempotency_key: str = "") -> dict:
     base, token = _source_base(), _source_token()
     if method not in ("GET", "POST") or path not in (
-        "/agent-tasks/capabilities", "/agent-tasks/messages", "/agent-tasks/submit"):
+        "/agent-tasks", "/agent-tasks/capabilities", "/agent-tasks/messages", "/agent-tasks/submit"):
         raise GatewayError("unsupported_source_operation")
     headers = {"Accept": "application/json", "Authorization": "Bearer " + token}
     data = None
@@ -118,23 +118,39 @@ def _verified_capabilities(agent: str, needed: str) -> None:
         raise GatewayError("source_capability_not_verified")
 
 
+def _registry() -> list:
+    data = _request("GET", "/agent-tasks")
+    if data.get("success") is not True or not isinstance(data.get("tasks"), list):
+        raise GatewayError("invalid_source_registry")
+    return data["tasks"]
+
+
 def list_agents() -> dict:
-    """Actual registry observations only; never claim that agents are running."""
-    return original_agents_report()
+    """Real source registry observations. Profiles are not worker instances."""
+    tasks = _registry()
+    agents = []
+    for name, (slug, role) in ORIGINAL_AGENTS.items():
+        matching = [task for task in tasks if isinstance(task, dict) and task.get("agent") == name]
+        agents.append({
+            "id": slug, "name": name, "role": role,
+            "tasksInRegistry": len(matching),
+            "runningEntriesInRegistry": sum(task.get("status") == "running" for task in matching),
+            "workerVerified": False, "connected": False,
+        })
+    return {
+        "sourceRepository": SOURCE_REPO,
+        "registryReachable": True,
+        "originalAgentExecutionVerified": False,
+        "agents": agents,
+    }
 
 
 def get_task_status(agent: str, task_id: str) -> dict:
     agent = _agent(agent)
     if not isinstance(task_id, str) or not _SAFE_ID.fullmatch(task_id):
         raise GatewayError("invalid_task_id")
-    _source_base()
-    # The original registry is currently the only verified source API.
-    # The read remains a registry observation, not proof of execution.
-    try:
-        data = fetch_registry()
-    except (OSError, ValueError, urllib.error.URLError, json.JSONDecodeError):
-        raise GatewayError("original_agents_unreachable") from None
-    for task in data["tasks"]:
+    # Source /api/agent-tasks is the existing real registry, not an agent worker.
+    for task in _registry():
         if (isinstance(task, dict) and task.get("agent") == agent
                 and str(task.get("id", "")) == task_id):
             status = task.get("status")
