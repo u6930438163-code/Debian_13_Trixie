@@ -1297,28 +1297,183 @@ function bindWorkCreateForm() {
 function bindTerminalForm() {
   const form = document.getElementById('terminal-form');
   if (!form) return;
+  let activeController = null;
+  const stop = document.getElementById('terminal-stop');
+  const feedback = document.getElementById('terminal-feedback');
+  const liveStatus = document.getElementById('terminal-live-status');
+  const setStatus = (text) => { if (liveStatus) liveStatus.textContent = text; };
+  document.getElementById('terminal-clear')?.addEventListener('click', () => {
+    document.getElementById('terminal-output')?.replaceChildren();
+    setStatus('Ekran wyczyszczony · procesy nie zostały zmienione');
+  });
+  stop?.addEventListener('click', () => {
+    if (!activeController) return;
+    activeController.abort();
+    setStatus('Przerwano odbiór danych · serwer nie potwierdził zatrzymania');
+  });
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
     const commandInput = document.getElementById('terminal-command');
     const submit = document.getElementById('terminal-submit');
-    const feedback = document.getElementById('terminal-feedback');
     const command = commandInput?.value.trim();
-    if (!command || !feedback) return;
+    if (!command || !feedback || activeController) return;
+    const controller = new AbortController();
+    activeController = controller;
     submit.disabled = true;
-    feedback.textContent = 'Wysyłanie do ograniczonego API terminala…';
+    if (stop) stop.hidden = false;
+    setStatus('Łączenie z rzeczywistym terminalem…');
+    feedback.textContent = 'Oczekiwanie na odpowiedź API…';
+    const terminal = document.getElementById('terminal-output');
+    terminal?.querySelector('.terminal-hint')?.remove();
+    const heading = document.createElement('p');
+    heading.className = 'terminal-prompt';
+    heading.textContent = '$ ' + command;
+    const output = document.createElement('pre');
+    output.className = 'terminal-result';
+    output.textContent = '';
+    terminal?.append(heading, output);
+    let done = false;
+    let failed = false;
     try {
-      const result = await api.terminal(command);
-      if (typeof result.output !== 'string') throw new ApiError('API nie zwróciło wyniku tekstowego.');
-      renderTerminal(command, result.output);
-      commandInput.value = '';
-      feedback.textContent = 'Polecenie obsłużone bez uruchamiania powłoki.';
+      await api.terminalStream(command, ({ event, payload }) => {
+        if (event === 'meta') {
+          setStatus('Terminal LIVE · ' + (payload.command || 'polecenie'));
+          feedback.textContent = 'Odczyt rzeczywistego stdout/stderr…';
+        } else if (event === 'delta' && typeof payload.text === 'string') {
+          output.textContent += payload.text;
+          if (payload.stream === 'stderr') output.classList.add('terminal-error');
+          if (output.textContent.length > 1024 * 1024) {
+            throw new ApiError('Wynik jest zbyt obszerny.');
+          }
+          if (terminal) terminal.scrollTop = terminal.scrollHeight;
+        } else if (event === 'done') {
+          done = true;
+          const code = Number(payload.exitCode);
+          output.textContent += '\n[kod zakończenia: ' + code + ']';
+          if (code !== 0) output.classList.add('terminal-error');
+          setStatus('Zakończono · exit ' + code);
+        } else if (event === 'error') {
+          failed = true;
+          output.textContent += '\n[Błąd: ' + (payload.code || 'terminal_error') + ']';
+          output.classList.add('terminal-error');
+          setStatus('Błąd polecenia');
+        }
+      }, controller.signal);
+      if (!done && !failed) throw new ApiError('Nie otrzymano końcowego statusu polecenia.');
+      if (done) {
+        commandInput.value = '';
+        feedback.textContent = 'Zakończono rzeczywiste polecenie z listy dozwolonych.';
+      } else {
+        feedback.textContent = 'Backend zgłosił błąd. Nie potwierdzono sukcesu.';
+      }
     } catch (error) {
-      renderTerminal(command, error.message, true);
-      feedback.textContent = error.message;
+      if (error.name === 'AbortError') {
+        output.textContent += '\n[Odbiór anulowany lokalnie · stan serwera niepotwierdzony]';
+        feedback.textContent = 'Przerwano odbiór terminala.';
+      } else {
+        output.textContent += '\n[Błąd: ' + error.message + ']';
+        feedback.textContent = error.message;
+        setStatus('Niepowodzenie terminala');
+      }
+      output.classList.add('terminal-error');
     } finally {
+      activeController = null;
       submit.disabled = false;
-      await loadTasks();
+      if (stop) stop.hidden = true;
+      void loadTasks();
     }
+  });
+}
+
+function bindInteractiveScripts() {
+  const select = document.getElementById('script-select');
+  const startForm = document.getElementById('script-start-form');
+  const answerForm = document.getElementById('script-answer-form');
+  const output = document.getElementById('script-live-output');
+  const question = document.getElementById('script-prompt');
+  const answerInput = document.getElementById('script-answer');
+  let active = null;
+  if (!select || !startForm || !answerForm || !output) return;
+  const draw = (state) => {
+    active = state.status === 'waiting_input' ? state : null;
+    output.textContent = [
+      'Skrypt: ' + state.scriptId,
+      'Status: ' + state.status,
+      'Etap: ' + state.step + '/' + state.stepCount,
+      ...(Array.isArray(state.output) ? state.output : []),
+    ].join('\n');
+    answerForm.hidden = !active;
+    if (active && question) question.textContent = state.prompt || 'Odpowiedz skryptowi';
+    if (active) answerInput?.focus();
+  };
+  api.listScripts().then((data) => {
+    select.replaceChildren();
+    for (const script of data.scripts || []) {
+      const option = document.createElement('option');
+      option.value = script.id;
+      option.textContent = script.name + ' — ' + script.description;
+      select.append(option);
+    }
+    if (!select.children.length) output.textContent = 'API nie udostępnia skryptów.';
+  }).catch((err) => {
+    select.replaceChildren();
+    output.textContent = 'Lista skryptów niedostępna: ' + err.message;
+  });
+  startForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (active) { output.textContent = 'Najpierw zakończ lub anuluj poprzedni skrypt.'; return; }
+    const button = document.getElementById('script-start');
+    if (button) button.disabled = true;
+    try { draw(await api.startScript(select.value)); }
+    catch (err) { output.textContent = 'Błąd uruchomienia: ' + err.message; }
+    finally { if (button) button.disabled = false; }
+  });
+  answerForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (!active || !answerInput?.value.trim()) return;
+    const id = active.sessionId;
+    const button = document.getElementById('script-answer-submit');
+    if (button) button.disabled = true;
+    try {
+      draw(await api.respondScript(id, answerInput.value.trim()));
+      answerInput.value = '';
+    } catch (err) { output.textContent = 'Błąd odpowiedzi: ' + err.message; }
+    finally { if (button) button.disabled = false; }
+  });
+  document.getElementById('script-cancel')?.addEventListener('click', async () => {
+    if (!active) return;
+    try { draw(await api.cancelScript(active.sessionId)); }
+    catch (err) { output.textContent = 'Błąd anulowania: ' + err.message; }
+  });
+}
+
+function bindWallpaper() {
+  const file = document.getElementById('wallpaper-file');
+  let current = '';
+  const reset = () => {
+    if (current) URL.revokeObjectURL(current);
+    current = '';
+    document.body.style.removeProperty('--user-wallpaper');
+  };
+  file?.addEventListener('change', () => {
+    const image = file.files?.[0];
+    if (!image) return;
+    if (!['image/png', 'image/jpeg', 'image/webp'].includes(image.type)
+        || image.size > 8 * 1024 * 1024) {
+      setText('wallpaper-feedback', 'Wybierz PNG/JPEG/WebP do 8 MB.');
+      file.value = '';
+      return;
+    }
+    reset();
+    current = URL.createObjectURL(image);
+    // Browser-local wallpaper. Not uploaded and not persisted to any server.
+    document.body.style.setProperty('--user-wallpaper', 'url("' + current + '")');
+    setText('wallpaper-feedback', 'Własna tapeta jest widoczna w bieżącej karcie. Nie wysłano jej na serwer.');
+  });
+  document.getElementById('wallpaper-reset')?.addEventListener('click', () => {
+    reset();
+    if (file) file.value = '';
+    setText('wallpaper-feedback', 'Przywrócono motyw domyślny.');
   });
 }
 
@@ -1360,6 +1515,8 @@ if (typeof document !== 'undefined') {
   bindNavigation();
   bindChatForm();
   bindTerminalForm();
+  bindInteractiveScripts();
+  bindWallpaper();
   bindWorkCreateForm();
   bindBridgeForm();
   renderHistory();
