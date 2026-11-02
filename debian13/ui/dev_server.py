@@ -26,6 +26,7 @@ API_PATHS = {
     ("POST", "/api/v1/vision"),
     ("POST", "/api/v1/terminal"),
     ("POST", "/api/v1/bridge"),
+    ("POST", "/api/v1/bridge/terminate"),
 }
 API_TASK_PATH = re.compile(
     r"/api/v1/tasks/[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}",
