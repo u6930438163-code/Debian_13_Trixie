@@ -8,7 +8,7 @@
       name="description"
       content="Niezależna konsola systemowa i projekt OS Debian 13 z API, trwałym rejestrem zadań Work, terminalem i profilami agentów."
     />
-    <title>Debian 13 · Console</title>
+    <title>Debian 13 · Modern AI Workspace</title>
     <meta property="og:title" content="Debian 13 · Console" />
     <meta property="og:description" content="Niezależna konsola systemowa i projekt OS Debian 13 z API, trwałym rejestrem zadań Work, terminalem i profilami agentów." />
     <meta property="og:type" content="website" />
@@ -27,7 +27,7 @@
           <span class="brand-mark" aria-hidden="true">D13</span>
           <span>
             <strong>Debian 13</strong>
-            <span class="brand-subtitle">Console · nowy system</span>
+            <span class="brand-subtitle">Modern AI Workspace · niezależny system</span>
           </span>
         </a>
         <div id="connection-status" class="runtime-pill" role="status" aria-live="polite">
@@ -72,17 +72,16 @@
 
           <section class="sidebar-section channel-section" aria-labelledby="channel-title">
             <h2 id="channel-title" class="sidebar-section-title">Profile</h2>
-            <label class="channel-select-label" for="chat-agent">Rozmowa z profilem (uprawnienia root)</label>
+            <label class="channel-select-label" for="chat-agent">Kanał rozmowy · oryginalni agenci</label>
             <select id="chat-agent" name="agent" aria-label="Wybierz profil agenta">
-              <option value="aria">Aria [root]</option>
-              <option value="astyria">Astyria [root]</option>
-              <option value="aurelius">Aurelius [root]</option>
-              <option value="alex">Alex [root]</option>
+              <option value="aria">Aria</option>
+              <option value="alex">Alex</option>
+              <option value="astyria">Astyria</option>
+              <option value="aurelius">Aurelius</option>
+              <option value="wszyscy">Wszyscy · tylko podgląd</option>
             </select>
-            <button class="nav-button unsupported-channel" type="button" disabled title="API v1 nie obsługuje czatu grupowego">
-              <span class="nav-icon" aria-hidden="true">◎</span><span class="nav-label">Wszyscy · niedostępne</span>
-            </button>
-            <p class="sidebar-note">Wszystkie podłączone modele AI posiadają uprawnienia root / administratora.</p>
+            <p class="sidebar-note" id="channel-status" role="status">Wiadomości będą kierowane tylko do wybranego profilu, jeśli połączono rzeczywisty model.</p>
+            <p class="sidebar-note">Profile nie oznaczają uruchomionych agentów ani uprawnień root. Połączenie potwierdza źródłowe API.</p>
           </section>
 
           <div class="sidebar-runtime">
@@ -96,7 +95,7 @@
             <div>
               <p class="eyebrow">NIEZALEŻNE ŚRODOWISKO DEBIAN 13</p>
               <h1 id="page-title">W czym mogę pomóc?</h1>
-              <p>Wiadomości są wysyłane do lokalnego API. Odpowiedź modelu pojawi się tylko wtedy, gdy Ollama jest dostępna.</p>
+              <p>Przestrzeń AI i Debian 13: prawdziwe API, zadania Work, interaktywny terminal. Bez symulowanych agentów.</p>
             </div>
             <div class="view-switch" role="group" aria-label="Widok pracy">
               <button class="view-switch-button is-active" type="button" data-view="chat" aria-pressed="true">Czat</button>
@@ -107,6 +106,19 @@
           </section>
 
           <section id="chat-view" class="workspace-view chat-view" aria-label="Czat">
+            <div class="chat-workspace-heading">
+              <div><span class="eyebrow">TWOJE CENTRUM DOWODZENIA</span><h2>Rozmowy z agentami AI</h2>
+                <p id="agent-channel-feedback" class="chat-workspace-subtitle">Wybierz oryginalnego agenta. Połączenie jest weryfikowane przez API.</p>
+              </div>
+              <button id="new-chat-inline" class="button button-secondary" type="button">＋ Nowy czat</button>
+            </div>
+            <div id="agent-tiles" class="agent-tiles" role="group" aria-label="Oryginalni agenci AI">
+              <button type="button" class="agent-tile" data-agent-channel="aria" aria-pressed="true"><span class="agent-avatar avatar-aria">AR</span><span><strong>Aria</strong><small>Modele i komunikacja</small><em data-tile-status="aria">Sprawdzanie…</em></span></button>
+              <button type="button" class="agent-tile" data-agent-channel="alex" aria-pressed="false"><span class="agent-avatar avatar-alex">AL</span><span><strong>Alex</strong><small>Architektura i kod</small><em data-tile-status="alex">Sprawdzanie…</em></span></button>
+              <button type="button" class="agent-tile" data-agent-channel="astyria" aria-pressed="false"><span class="agent-avatar avatar-astyria">AS</span><span><strong>Astyria</strong><small>Interfejs i UX</small><em data-tile-status="astyria">Sprawdzanie…</em></span></button>
+              <button type="button" class="agent-tile" data-agent-channel="aurelius" aria-pressed="false"><span class="agent-avatar avatar-aurelius">AU</span><span><strong>Aurelius</strong><small>Audyt i bezpieczeństwo</small><em data-tile-status="aurelius">Sprawdzanie…</em></span></button>
+            </div>
+            <div class="channel-notice" id="group-channel-notice" hidden>„Wszyscy” wymaga rzeczywistej bramy wiadomości między oryginalnymi agentami. Wysyłanie jest chwilowo zablokowane, żeby nie udawać czatu grupowego.</div>
             <div id="chat-transcript" class="transcript" aria-label="Rozmowa" aria-live="polite" aria-relevant="additions text">
               <p class="empty-state">
                 Wybierz profil i wyślij wiadomość. <code>/help</code> działa lokalnie;
@@ -221,6 +233,8 @@
               <span class="local-badge">pwd · ls · cat</span>
             </div>
             <p class="work-limit-note">To nie jest powłoka systemowa. Polecenia są walidowane i obsługiwane przez API.</p>
+            <div class="terminal-live-bar"><span class="runtime-pill" id="terminal-live-status">Gotowy · polecenia tylko do odczytu</span>
+              <button id="terminal-clear" type="button" class="button button-secondary">Wyczyść ekran</button></div>
             <div id="terminal-output" class="terminal-output" aria-label="Wynik terminala" aria-live="polite">
               <p class="terminal-hint">Dozwolone są wyłącznie pwd, ls oraz cat &lt;plik&gt; w katalogu roboczym.</p>
             </div>
@@ -240,18 +254,43 @@
                 <p id="terminal-feedback" class="form-feedback" aria-live="polite">
                   Obsługiwane są tylko pwd, ls i cat &lt;plik&gt; w katalogu roboczym.
                 </p>
-                <button id="terminal-submit" type="submit" class="button button-secondary">Uruchom</button>
+                <button id="terminal-submit" type="submit" class="button button-secondary">Uruchom LIVE</button>
+                <button id="terminal-stop" type="button" class="button button-secondary" hidden>Zatrzymaj odbiór</button>
               </div>
             </form>
+            <section id="interactive-scripts" class="interactive-script-card" aria-label="Interaktywne skrypty Python">
+              <div class="section-heading"><div><p class="eyebrow">PYTHON · INTERAKTYWNE</p><h3>Skrypty diagnostyczne</h3></div>
+                <span class="local-badge">Izolowane · bez root</span></div>
+              <p class="work-limit-note">Wybierz dozwolony skrypt. Otrzymasz rzeczywiste pytanie z backendu i wpiszesz odpowiedź. Dowolny kod Python pozostaje zablokowany.</p>
+              <form id="script-start-form" class="script-controls">
+                <label for="script-select">Scenariusz</label><select id="script-select" required><option value="">Ładowanie listy…</option></select>
+                <button id="script-start" class="button button-primary" type="submit">Uruchom skrypt</button>
+              </form>
+              <div id="script-live-output" class="script-output" role="status" aria-live="polite">Nie uruchomiono żadnego skryptu.</div>
+              <form id="script-answer-form" class="script-controls" hidden>
+                <label id="script-prompt" for="script-answer">Odpowiedź skryptu</label>
+                <input id="script-answer" maxlength="240" autocomplete="off" placeholder="Wpisz odpowiedź…" required />
+                <button id="script-answer-submit" type="submit" class="button button-secondary">Odpowiedz</button>
+                <button id="script-cancel" type="button" class="button button-secondary">Anuluj</button>
+              </form>
+            </section>
           </section>
 
           <section id="settings-view" class="workspace-view settings-view" aria-labelledby="settings-title" hidden>
             <div class="section-heading">
               <div>
                 <p class="eyebrow">DIAGNOSTYKA API</p>
-                <h2 id="settings-title">Status systemu i profili</h2>
+                <h2 id="settings-title">Status systemu, integracje i wygląd</h2>
               </div>
               <button id="refresh-status" class="button button-secondary" type="button">Odśwież</button>
+            </div>
+            <div class="wallpaper-settings">
+              <h3>Motyw Modern OS · tapeta Bastilla</h3>
+              <p class="work-limit-note">Domyślnie wyświetlane jest autorskie tło kosmiczne. Możesz wczytać wybraną tapetę Bastilla Shan z urządzenia — pozostanie w Twojej przeglądarce.</p>
+              <label class="button button-secondary" for="wallpaper-file">Wybierz tapetę</label>
+              <input id="wallpaper-file" type="file" accept="image/png,image/jpeg,image/webp" />
+              <button id="wallpaper-reset" class="button button-secondary" type="button">Przywróć tło domyślne</button>
+              <p id="wallpaper-feedback" class="form-feedback" role="status"></p>
             </div>
             <p id="status-error" class="status-error" aria-live="polite"></p>
             <dl id="runtime-details" class="runtime-grid" aria-live="polite">
