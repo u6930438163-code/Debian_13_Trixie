@@ -13,7 +13,7 @@ import urllib.request
 
 from alex_bridge import NoRedirect, SOURCE_REPO, existing_api_base
 
-TARGET_REPO = "mmitek515-netizen/Debian_13"
+TARGET_REPO = "u6930438163-code/Debian_13_Trixie"
 CAPABILITY = "debian13_issue_to_pr"
 MAX_RESPONSE_BYTES = 16384
 
