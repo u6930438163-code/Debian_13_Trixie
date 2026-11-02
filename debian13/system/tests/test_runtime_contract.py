@@ -74,7 +74,11 @@ class RuntimeContractTests(unittest.TestCase):
         self.assertEqual(data["model"]["inference"], "unverified")
         status, data = self.request("GET", "/api/v1/agents")
         self.assertEqual(status, 200)
-        self.assertTrue(all(agent["worker"] == "not_running" for agent in data["agents"]))
+        self.assertTrue(all(agent["worker"] in ("unverified", "disabled", "provider_unavailable", "idle")
+                            for agent in data["agents"]))
+        self.assertTrue(all(agent["workerVerified"] is False for agent in data["agents"]))
+        self.assertTrue(all(agent["access_level"] == "operator_approval_required"
+                            for agent in data["agents"]))
         for path in ("/api/v1/tasks", "/api/v1/events"):
             status, _ = self.request("GET", path)
             self.assertEqual(status, 200)
