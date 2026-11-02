@@ -63,6 +63,22 @@ GATEWAY_TOOLS = {
         },
         "readOnly": False,
     },
+    "propose_root_command": {
+        "description": "Propose ONE allowlisted container-root diagnostic/repair for an original agent. NEVER executes root automatically; a separate human approval secret and isolated runner are required.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "agent": {"type": "string", "enum": ["Alex", "Aria", "Astyria", "Aurelius"]},
+                "command_id": {"type": "string", "enum": [
+                    "identity", "kernel", "package_audit", "workspace_disk",
+                    "workspace_permissions", "repair_workspace_owner"]},
+                "reason": {"type": "string", "minLength": 1, "maxLength": 350},
+            },
+            "required": ["agent", "command_id", "reason"],
+            "additionalProperties": False,
+        },
+        "readOnly": False,
+    },
     "get_task_status": {
         "description": "Read the status of an exact agent task ID in the owner's original registry; status alone does not prove the worker executed.",
         "inputSchema": {
@@ -116,6 +132,41 @@ def read_api(path: str) -> dict:
     if not isinstance(result, dict):
         raise ValueError("Invalid API response")
     return result
+
+
+def propose_root_command(agent: object, command_id: object, reason: object) -> dict:
+    from root_admin import AGENTS, COMMANDS
+    if not isinstance(agent, str) or agent not in AGENTS:
+        raise ValueError("unknown_original_agent")
+    if not isinstance(command_id, str) or command_id not in COMMANDS:
+        raise ValueError("root_command_not_allowlisted")
+    if not isinstance(reason, str) or not 1 <= len(reason.strip()) <= 350:
+        raise ValueError("invalid_reason")
+    token = os.environ.get("DEBIAN13_API_TOKEN", "")
+    if len(token) < 32 or any(ord(c) < 33 or ord(c) > 126 for c in token):
+        raise ValueError("unconfigured operator token")
+    body = json.dumps({"agent": agent, "commandId": command_id,
+                       "reason": reason.strip()}).encode("utf-8")
+    req = urllib.request.Request(
+        api_base() + "/api/v1/admin/proposals", data=body,
+        method="POST", headers={
+            "Authorization": "Bearer " + token,
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        })
+    opener = urllib.request.build_opener(
+        urllib.request.HTTPHandler, urllib.request.HTTPSHandler, NoRedirect)
+    with opener.open(req, timeout=10) as response:
+        if response.status != 201:
+            raise ValueError("root_proposal_rejected")
+        raw = response.read(4096)
+    result = json.loads(raw)
+    if (not isinstance(result, dict) or result.get("status") != "pending_approval"
+            or result.get("executionStarted") is not False):
+        raise ValueError("root_proposal_not_confirmed")
+    return {"agent": agent, "commandId": command_id, "proposalId": result.get("id"),
+            "pendingOperatorApproval": True, "executionStarted": False,
+            "rootScope": "isolated_container_only"}
 
 
 def response(request: dict) -> dict | None:
@@ -183,6 +234,9 @@ def response(request: dict) -> dict | None:
                     value = agent_gateway.create_task(
                         arguments["agent"], arguments["title"], arguments["description"],
                         arguments.get("kind", "development"))
+                elif name == "propose_root_command":
+                    value = propose_root_command(
+                        arguments["agent"], arguments["command_id"], arguments["reason"])
                 else:
                     value = agent_gateway.get_task_status(arguments["agent"], arguments["task_id"])
             else:
