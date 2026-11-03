@@ -401,6 +401,11 @@
               <p>Dwukierunkowa wymiana komunikatów przez API oraz inspekcja narzędzi MCP w czasie rzeczywistym:</p>
               <div class="mcp-config-box">
                 <form id="bridge-form" class="composer" style="margin-top: 8px;">
+                  <label for="bridge-provider">Dostawca modelu (wywołanie prawdziwego API)</label>
+                  <select id="bridge-provider" aria-label="Wybierz dostawcę AI" style="display:block; width:100%; margin-bottom:8px; padding:6px; background:#0b1320; color:#fff; border:1px solid var(--border); border-radius:6px;">
+                    <option value="openai">OpenAI API</option>
+                    <option value="gemini">Gemini API</option>
+                  </select>
                   <label for="bridge-message">Wiadomość testowa do mostka AI</label>
                   <input id="bridge-message" type="text" placeholder="np. Sprawdź stan diagnostyki systemowej MCP" required style="width: 100%; margin-bottom: 8px; padding: 6px; background: #0b1320; color: #fff; border: 1px solid var(--border); border-radius: 6px;" />
                   <div style="display: flex; gap: 8px; align-items: center;">
