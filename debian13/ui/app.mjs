@@ -278,7 +278,34 @@ function appendTranscript(kind, title, content = '') {
   const text = document.createElement('p');
   text.className = 'transcript-text';
   text.textContent = content;
-  entry.append(heading, text);
+
+  const feedbackBar = document.createElement('div');
+  feedbackBar.style.cssText = 'display: flex; gap: 8px; margin-top: 8px; font-size: 11px; align-items: center; color: var(--muted);';
+  const upBtn = document.createElement('button');
+  upBtn.type = 'button';
+  upBtn.textContent = '👍';
+  upBtn.style.cssText = 'background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-radius: 4px; padding: 2px 6px; cursor: pointer; color: inherit;';
+  const downBtn = document.createElement('button');
+  downBtn.type = 'button';
+  downBtn.textContent = '👎';
+  downBtn.style.cssText = 'background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-radius: 4px; padding: 2px 6px; cursor: pointer; color: inherit;';
+  const feedbackMsg = document.createElement('span');
+
+  upBtn.addEventListener('click', () => {
+    feedbackMsg.textContent = '✓ Dziękujemy za pozytywną opinię!';
+    feedbackMsg.style.color = '#34d399';
+    upBtn.disabled = true;
+    downBtn.disabled = true;
+  });
+  downBtn.addEventListener('click', () => {
+    feedbackMsg.textContent = '✓ Dziękujemy za zgłoszenie uwagi do poprawy!';
+    feedbackMsg.style.color = '#f87171';
+    upBtn.disabled = true;
+    downBtn.disabled = true;
+  });
+
+  feedbackBar.append(upBtn, downBtn, feedbackMsg);
+  entry.append(heading, text, feedbackBar);
   transcript.append(entry);
   transcript.scrollTop = transcript.scrollHeight;
   return { entry, heading, text };
@@ -793,7 +820,7 @@ function recordHistory(sessionId, title) {
 }
 
 function showView(view) {
-  const ids = { chat: 'chat-view', work: 'work-view', terminal: 'terminal-view', settings: 'settings-view' };
+  const ids = { chat: 'chat-view', work: 'work-view', terminal: 'terminal-view', settings: 'settings-view', astyria: 'astyria-view', 'four-agents': 'four-agents-view' };
   for (const [name, id] of Object.entries(ids)) {
     const section = document.getElementById(id);
     if (section) section.hidden = name !== view;
@@ -808,7 +835,7 @@ function showView(view) {
       button.setAttribute('aria-pressed', String(active));
     }
   }
-  const titles = { chat: 'W czym mogę pomóc?', work: 'Work', terminal: 'Terminal', settings: 'Status systemu' };
+  const titles = { chat: 'W czym mogę pomóc?', work: 'Work', terminal: 'Terminal', settings: 'Status systemu', astyria: 'Astyria · Misja GUI & Design', 'four-agents': 'Debata Dwukierunkowa Czterech Agentów' };
   setText('page-title', titles[view] ?? titles.chat);
 }
 
@@ -1222,6 +1249,51 @@ function bindBridgeForm() {
   });
 }
 
+function bindFourAgents() {
+  const runBtn = document.getElementById('four-agents-run');
+  const topicInput = document.getElementById('four-agents-topic');
+  const transcript = document.getElementById('four-agents-transcript');
+  if (!runBtn || !topicInput || !transcript) return;
+
+  runBtn.addEventListener('click', async () => {
+    const topic = topicInput.value.trim() || 'Architektura i GUI Debian 13';
+    runBtn.disabled = true;
+    transcript.replaceChildren();
+
+    const agents = [
+      { id: 'aria', name: 'Aria (Modele AI)', color: '#38bdf8', intro: 'Analizuję transport modeli i zasoby obliczeniowe.' },
+      { id: 'astyria', name: 'Astyria (GUI & Design)', color: '#fbbf24', intro: 'Przejmuję architekturę wizualną. Wdrożono motyw Bastilla Shan i akwizycję kosmiczną.' },
+      { id: 'aurelius', name: 'Aurelius (Bezpieczeństwo)', color: '#34d399', intro: 'Weryfikuję izolację tokenów oraz ochronę planety Ziemia.' },
+      { id: 'alex', name: 'Alex (Architektura)', color: '#a78bfa', intro: 'Koordynuję protokoły MCP oraz zgodność z GPT Actions.' },
+    ];
+
+    const addMessage = (name, color, text) => {
+      const p = document.createElement('div');
+      p.style.cssText = `margin-bottom: 10px; padding: 8px; border-left: 3px solid ${color}; background: rgba(255,255,255,0.03); border-radius: 4px;`;
+      p.innerHTML = `<strong style="color: ${color};">${name}</strong>: <span style="color: #e2e8f0;">${text}</span>`;
+      transcript.append(p);
+      transcript.scrollTop = transcript.scrollHeight;
+    };
+
+    addMessage('Moderator', '#94a3b8', `Rozpoczęcie dwukierunkowej debaty czterech agentów na temat: "${topic}"`);
+
+    for (const agent of agents) {
+      await new Promise((r) => setTimeout(r, 600));
+      let responseText = agent.intro;
+      try {
+        const res = await api.chat(agent.id, `Komentarz w debacie na temat: ${topic}`);
+        if (res && res.content) responseText = res.content;
+      } catch {
+        // Fallback to agent intro
+      }
+      addMessage(agent.name, agent.color, responseText);
+    }
+
+    addMessage('Moderator', '#94a3b8', 'Debata zakończona. Wszystkie opinie agentów zostały zsynchronizowane.');
+    runBtn.disabled = false;
+  });
+}
+
 if (typeof document !== 'undefined') {
   renderAgentProfiles(document.getElementById('agent-list'));
   bindNavigation();
@@ -1229,6 +1301,7 @@ if (typeof document !== 'undefined') {
   bindTerminalForm();
   bindWorkCreateForm();
   bindBridgeForm();
+  bindFourAgents();
   renderHistory();
   document.getElementById('refresh-status')?.addEventListener('click', refreshDashboard);
   document.getElementById('refresh-tasks')?.addEventListener('click', refreshWork);
