@@ -13,6 +13,11 @@ on:
         options: [Alex, Aria, Astyria, Aurelius]
   issue_comment:
     types: [created]
+  pull_request:
+    paths:
+      - '.github/workflows/original-agent-issues.yml'
+      - '.github/scripts/original_agent_issue.py'
+      - '.github/scripts/test_original_agent_issue.py'
 permissions:
   contents: read
   issues: write
@@ -20,6 +25,15 @@ concurrency:
   group: original-agents-${{ github.repository }}-${{ github.event.issue.number || inputs.issue_number }}
   cancel-in-progress: false
 jobs:
+  offline-bridge-tests:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - run: python3 .github/scripts/test_original_agent_issue.py
   original-agent-review:
     if: >-
       github.event_name == 'workflow_dispatch' ||
