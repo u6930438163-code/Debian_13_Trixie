@@ -177,8 +177,15 @@ function proxyToPython(req: Request, res: Response) {
 }
 
 app.use('/healthz', (req, res) => proxyToPython(req, res));
-// Allow the hosted browser UI to call /api/v1/* using server-injected loopback token
-app.use('/api/v1', (req, res) => proxyToPython(req, res));
+// The browser MUST prove operator authorization before the gateway injects its
+// own loopback credential. Without this check, private APIs are publicly readable.
+app.use('/api/v1', (req, res, next) => {
+  if (!hasBearerCredential(req.header('authorization'), apiToken)) {
+    res.status(401).json({ error: { code: 'unauthorized', message: 'Operator Bearer token required.' } });
+    return;
+  }
+  next();
+}, proxyToPython);
 
 // GPT Actions and remote MCP use authenticated API routes.
 // These routes require explicit operator Bearer token credential.
