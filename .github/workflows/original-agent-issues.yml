@@ -1,0 +1,43 @@
+name: Original AI Studio agents - GitHub Issues review
+on:
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: Existing open Issue number
+        required: true
+        type: number
+      agent:
+        description: Original AI Studio agent
+        required: true
+        type: choice
+        options: [Alex, Aria, Astyria, Aurelius]
+  issue_comment:
+    types: [created]
+permissions:
+  contents: read
+  issues: write
+concurrency:
+  group: original-agents-${{ github.repository }}-${{ github.event.issue.number || inputs.issue_number }}
+  cancel-in-progress: false
+jobs:
+  original-agent-review:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'issue_comment' &&
+       !github.event.issue.pull_request &&
+       github.event.comment.user.login == github.repository_owner &&
+       startsWith(github.event.comment.body, '/agent '))
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Submit issue to verified ORIGINAL worker (not Copilot)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_NUMBER: ${{ github.event.issue.number || inputs.issue_number }}
+          AGENT_REQUEST: ${{ github.event.comment.body || inputs.agent }}
+          ORIGINAL_AGENT_API_URL: ${{ secrets.ORIGINAL_AGENT_API_URL }}
+          ORIGINAL_AGENT_API_TOKEN: ${{ secrets.ORIGINAL_AGENT_API_TOKEN }}
+        run: python3 .github/scripts/original_agent_issue.py
