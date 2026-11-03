@@ -114,3 +114,21 @@ Konfigurację połączeń MCP, Codex, oryginalnego Alexa i GPT Actions oraz wyma
 **Pełne uruchomienie samodzielnego systemu operacyjnego** (boot/ISO,
 sterowniki, instalacja i cały cykl agenta) nadal wymaga odrębnych etapów
 i weryfikacji sprzętowej; sukces CI aplikacji nie jest takim dowodem.
+
+## Nowy design — źródło wyświetlane w AI Studio i Codespaces
+
+**Jedyny kanoniczny interfejs:** `debian13/ui/index.html`, `debian13/ui/styles.css`
+oraz `debian13/ui/app.mjs`. Serwer Node (`server.ts`) i lokalny serwer Python
+wyświetlają właśnie ten interfejs. Główny `index.html` jest tylko przekierowaniem
+dla podglądu Vite/AI Studio do `debian13/ui/`. Pliki `src/App.tsx` nie są wejściem
+uruchomionej konsoli, więc ich edycja nie zmienia wyświetlanego GUI.
+
+Nowy wygląd obejmuje kafelki agentów, duży czat, diagnostykę, lokalne
+reakcje 👍/👎, terminal i ograniczone interaktywne skrypty. Statusy agentów
+wymagają potwierdzenia API, a brak połączenia nie jest symulowany.
+
+Po wypchnięciu kodu do GitHub otwórz **AI Studio → Settings → GitHub → Pull
+changes** dla podłączonego repozytorium. Sam push na GitHub nie potwierdza
+aktualizacji uruchomionej aplikacji ani automatycznej synchronizacji.
+HTML, CSS i JavaScript nie są cache'owane w serwerach podglądu, co zmniejsza
+ryzyko wyświetlania starych zasobów.

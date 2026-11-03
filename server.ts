@@ -52,6 +52,32 @@ console.log(`[Debian 13] Operator token active (${apiToken.length} chars).`);
 const geminiApiKey = process.env.GEMINI_API_KEY || '';
 const ai = geminiApiKey ? new GoogleGenAI({ apiKey: geminiApiKey }) : null;
 
+let ollamaProcess: ChildProcess | null = null;
+
+function ensureOllamaService() {
+  if (fs.existsSync('/usr/local/bin/ollama')) {
+    const req = http.get('http://127.0.0.1:11434/api/version', (res) => {
+      if (res.statusCode === 200) {
+        console.log('[Debian 13] Ollama service responding on 127.0.0.1:11434.');
+      }
+    });
+    req.on('error', () => {
+      console.log('[Debian 13] Starting background Ollama daemon...');
+      try {
+        ollamaProcess = spawn('/usr/local/bin/ollama', ['serve'], {
+          stdio: 'ignore',
+          detached: true,
+        });
+        ollamaProcess.unref();
+      } catch (err) {
+        console.warn('[Debian 13] Could not spawn ollama daemon:', err);
+      }
+    });
+  }
+}
+
+ensureOllamaService();
+
 // Start the Python backend process
 let pythonProcess: ChildProcess | null = null;
 
@@ -102,6 +128,10 @@ function cleanup() {
     console.log('[Debian 13] Terminating Python backend...');
     pythonProcess.kill('SIGTERM');
   }
+  if (ollamaProcess && !ollamaProcess.killed) {
+    console.log('[Debian 13] Terminating Ollama daemon...');
+    ollamaProcess.kill('SIGTERM');
+  }
 }
 process.on('SIGINT', () => { cleanup(); process.exit(0); });
 process.on('SIGTERM', () => { cleanup(); process.exit(0); });
@@ -147,11 +177,18 @@ function proxyToPython(req: Request, res: Response) {
 }
 
 app.use('/healthz', (req, res) => proxyToPython(req, res));
-// The hosted UI must authenticate before receiving the backend's privileged token.
-app.use('/api/v1', proxyAuthenticated);
+// The browser MUST prove operator authorization before the gateway injects its
+// own loopback credential. Without this check, private APIs are publicly readable.
+app.use('/api/v1', (req, res, next) => {
+  if (!hasBearerCredential(req.header('authorization'), apiToken)) {
+    res.status(401).json({ error: { code: 'unauthorized', message: 'Operator Bearer token required.' } });
+    return;
+  }
+  next();
+}, proxyToPython);
 
 // GPT Actions and remote MCP use authenticated API routes.
-// These routes must NOT inherit the UI's implicit internal token.
+// These routes require explicit operator Bearer token credential.
 function proxyAuthenticated(req: Request, res: Response) {
   if (!hasBearerCredential(req.header('authorization'), apiToken)) {
     res.status(401).json({ error: { code: 'unauthorized', message: 'Bearer token required.' } });
@@ -262,7 +299,14 @@ app.post('/v1/chat/completions', (req, res, next) => {
 
 // Serve static frontend UI from debian13/ui directory
 const uiDir = path.join(__dirname, 'debian13/ui');
-app.use(express.static(uiDir));
+app.use(express.static(uiDir, {
+  setHeaders(res, filePath) {
+    // Prevent old HTML/CSS/JS from masking a new design after GitHub sync.
+    if (/\.(?:html|css|js|mjs)$/.test(filePath)) {
+      res.setHeader('Cache-Control', 'no-store');
+    }
+  },
+}));
 
 // Fallback to index.html for all other GET routes
 app.get('*', (_req, res) => {

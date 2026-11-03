@@ -21,9 +21,11 @@ function apiErrorMessage(payload, status) {
   if (status === 401) return 'Brak autoryzacji API (401). Sprawdź token operatora i bezpieczny adres panelu.';
   if (status === 403) return 'API odrzuciło uprawnienia (403). Sprawdź dostęp operatora.';
   if (status === 404) return 'Backend nie udostępnia tego endpointu (404).';
-  return typeof payload?.error === 'string'
-    ? payload.error
-    : `Żądanie nie powiodło się (HTTP ${status}).`;
+  if (typeof payload?.error === 'string') return payload.error;
+  if (typeof payload?.error?.message === 'string' && payload.error.message.length <= 500) {
+    return payload.error.message;
+  }
+  return `Żądanie nie powiodło się (HTTP ${status}).`;
 }
 
 export function createApiClient({
@@ -137,6 +139,56 @@ export function createApiClient({
     if (buffer.trim()) dispatch(buffer);
   }
 
+  async function terminalStream(command, onEvent, signal) {
+    const response = await fetchRequest('terminal/stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ command }),
+      signal,
+    });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => null);
+      throw new ApiError(apiErrorMessage(payload, response.status), response.status);
+    }
+    if (!response.body || !response.headers.get('content-type')?.includes('text/event-stream')) {
+      throw new ApiError('Brak strumienia danych terminala.', response.status);
+    }
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let completed = false;
+    const dispatch = (frame) => {
+      let event = '';
+      let payload = null;
+      for (const line of frame.split(/\r?\n/)) {
+        if (line.startsWith('event:')) event = line.slice(6).trim();
+        if (line.startsWith('data:')) {
+          try { payload = JSON.parse(line.slice(5).trim()); }
+          catch { throw new ApiError('Nieprawidłowe zdarzenie terminala.'); }
+        }
+      }
+      if (!payload) return;
+      if (event === 'done' || event === 'error') completed = true;
+      onEvent({ event, payload });
+    };
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        buffer += decoder.decode(value, { stream: !done });
+        let separator;
+        while ((separator = /\r?\n\r?\n/.exec(buffer))) {
+          dispatch(buffer.slice(0, separator.index));
+          buffer = buffer.slice(separator.index + separator[0].length);
+        }
+        if (done) break;
+      }
+      if (buffer.trim()) dispatch(buffer);
+      if (!completed) throw new ApiError('Strumień terminala przerwany przed potwierdzeniem zakończenia.');
+    } finally {
+      reader.releaseLock();
+    }
+  }
+
   return Object.freeze({
     getStatus: () => request('status'),
     getAgents: () => request('agents'),
@@ -144,6 +196,8 @@ export function createApiClient({
     getIntegrations: () => request('integrations'),
     getTasks: () => request('tasks'),
     getAlexCapabilities: () => request('alex/capabilities'),
+    bridge: (message, sessionId = '', useOpenai = true) => post('bridge', { message, sessionId, useOpenai }),
+    terminateBridge: (sessionId) => post('bridge/terminate', { sessionId }),
     dispatchToAlex: (taskId) => request(`tasks/${encodeURIComponent(taskId)}/dispatch`, {method: 'POST'}),
     createTask: (task) => post('tasks', task),
     getTask: (taskId) => request(`tasks/${encodeURIComponent(taskId)}`),
@@ -153,6 +207,11 @@ export function createApiClient({
     chatStream,
     vision: (agent, message, image) => post('vision', { profile: agent, message, image }),
     terminal: (command) => post('terminal', { command }),
+    terminalStream,
+    listScripts: () => request('scripts'),
+    startScript: (scriptId) => post('scripts/start', { scriptId }),
+    respondScript: (sessionId, answer) => post('scripts/respond', { sessionId, answer }),
+    cancelScript: (sessionId) => post('scripts/cancel', { sessionId }),
   });
 }
 
@@ -254,6 +313,11 @@ function renderRuntimeStatus(status) {
   setText('application-status', application);
   setText('os-status', `${distribution} · ${boot}`);
   setText('model-status', modelStatusLabel(status.model));
+  const ollama = status.ollama;
+  const ollamaText = ollama?.running
+    ? `Działa (${ollama.version}) · ${ollama.active_model || 'qwen2.5:0.5b'} (aktywny)`
+    : 'Usługa Ollama niedostępna lokalnie';
+  setText('ollama-status', ollamaText);
   setText('task-storage-status', status.task_state ?? 'Stan pamięci zadań nieznany');
   setText('status-error', '');
   connectionState('connected', 'API dostępne');
@@ -272,6 +336,38 @@ function appendTranscript(kind, title, content = '') {
   text.className = 'transcript-text';
   text.textContent = content;
   entry.append(heading, text);
+  if (kind === 'user' || kind === 'assistant') {
+    // Local operator feedback only; NOT an AI-to-AI reaction.
+    const index = transcript.querySelectorAll('.transcript-entry').length;
+    const key = ['debian13-reaction-v1', activeSessionId || 'local', index, kind].join(':');
+    const controls = document.createElement('div');
+    controls.className = 'message-reactions';
+    let saved = '';
+    try { saved = localStorage.getItem(key) || ''; } catch { /* optional storage */ }
+    for (const [value, label] of [['up', '👍'], ['down', '👎']]) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'message-reaction';
+      button.textContent = label;
+      button.title = value === 'up' ? 'Oceń pozytywnie' : 'Oceń negatywnie';
+      button.setAttribute('aria-label', button.title);
+      button.setAttribute('aria-pressed', String(saved === value));
+      button.addEventListener('click', () => {
+        const next = button.getAttribute('aria-pressed') === 'true' ? '' : value;
+        for (const other of controls.querySelectorAll('.message-reaction')) {
+          other.setAttribute('aria-pressed', String(next !== '' && other === button));
+        }
+        try { if (next) localStorage.setItem(key, next); else localStorage.removeItem(key); }
+        catch { /* visual feedback remains available */ }
+      });
+      controls.append(button);
+    }
+    const note = document.createElement('span');
+    note.className = 'reaction-hint';
+    note.textContent = 'Ocena użytkownika · lokalnie';
+    controls.append(note);
+    entry.append(controls);
+  }
   transcript.append(entry);
   transcript.scrollTop = transcript.scrollHeight;
   return { entry, heading, text };
@@ -341,7 +437,13 @@ function renderTasks(tasks) {
       reconnect.setAttribute('aria-label', `Pobierz status zadania ${task.id}`);
       reconnect.addEventListener('click', () => void refreshTaskStatus(task.id, reconnect));
       actions.append(reconnect);
-      if (task.agent === 'alex' && task.status === 'queued') {
+      if (task.agent === 'alex' && task.alexSubmission) {
+        const receipt = document.createElement('span');
+        receipt.className = 'task-state';
+        receipt.textContent = 'Przekazane serwerowi Alexa · praca AI niepotwierdzona';
+        actions.append(receipt);
+      }
+      if (task.agent === 'alex' && task.status === 'queued' && !task.alexSubmission) {
         const dispatch = document.createElement('button');
         dispatch.type = 'button';
         dispatch.className = 'task-action task-dispatch';
@@ -351,7 +453,7 @@ function renderTasks(tasks) {
         dispatch.addEventListener('click', () => void dispatchWorkToAlex(task.id, dispatch));
         actions.append(dispatch);
       }
-      if (['queued', 'running'].includes(task.status)) {
+      if (task.status === 'queued' && !task.alexSubmission) {
         const cancel = document.createElement('button');
         cancel.type = 'button';
         cancel.className = 'task-action task-cancel';
@@ -371,7 +473,7 @@ function renderTasks(tasks) {
     fragment.append(empty);
   }
   list.replaceChildren(fragment);
-  setText('tasks-count', `${tasks.length} zadań · trwały zapis SQLite, bez uruchomionych workerów`);
+  setText('tasks-count', `${tasks.length} zadań · zapis SQLite · brak potwierdzonej pracy workerów`);
   setText('tasks-error', '');
 }
 
@@ -458,6 +560,8 @@ function renderHistory(activeId = '') {
 
 const api = createApiClient();
 let alexDispatchSupported = false;
+let cachedWorkTasks = [];
+let workRefreshPending = false;
 let activeSessionId = '';
 let activeChatController = null;
 let activeChatTaskId = '';
@@ -512,8 +616,18 @@ async function loadOriginalAgents() {
       fragment.append(item);
     }
     list.replaceChildren(fragment);
+    for (const agent of response.agents) {
+      const id = String(agent.id || agent.name || '').toLowerCase();
+      const statusElement = document.querySelector(`[data-tile-status="${id}"]`);
+      if (statusElement) statusElement.textContent = agent.workerVerified === true
+        ? 'Proces zweryfikowany' : response.registryReachable
+          ? 'Rejestr źródłowy' : 'Niepodłączony';
+    }
   } catch (error) {
     list.replaceChildren();
+    for (const element of document.querySelectorAll('[data-tile-status]')) {
+      element.textContent = 'API niedostępne';
+    }
     setText('original-agent-error', error.message);
   }
 }
@@ -576,6 +690,21 @@ async function loadIntegrations() {
   } catch (error) {
     setText('integration-error', error.message);
   }
+
+  try {
+    const mcpInfo = await api.get('mcp-info');
+    if (mcpInfo) {
+      setText('mcp-public-healthz', mcpInfo.healthzUrl || '/healthz');
+      setText('mcp-public-endpoint', mcpInfo.mcpUrl || '/mcp');
+      setText('mcp-bearer-token', mcpInfo.tokenMasked || '******** (chroniony w sekretach serwera)');
+      const openApiEl = document.getElementById('mcp-openapi-url');
+      if (openApiEl && mcpInfo.openApiUrl) {
+        openApiEl.textContent = mcpInfo.openApiUrl;
+      }
+    }
+  } catch {
+    setText('mcp-bearer-token', '******** (wymaga autoryzacji sesji)');
+  }
 }
 
 async function loadTasks() {
@@ -584,9 +713,11 @@ async function loadTasks() {
   try {
     const payload = await api.getTasks();
     if (!Array.isArray(payload.tasks)) throw new ApiError('Nieprawidłowy format listy zadań.');
+    cachedWorkTasks = payload.tasks;
     renderTasks(payload.tasks);
     return null;
   } catch (error) {
+    cachedWorkTasks = [];
     setText('tasks-count', 'Zadania niedostępne');
     setText('tasks-error', error.message);
     const list = document.getElementById('task-list');
@@ -625,12 +756,13 @@ async function refreshAlexCapabilities() {
     const state = response.alex;
     alexDispatchSupported = state?.configured === true && state?.supported === true;
     setText('alex-dispatch-state', alexDispatchSupported
-      ? 'Oryginalny Alex udostępnia protokół przekazania zadania. Nie potwierdzono jednak pracy modelu AI.'
-      : 'Oryginalny Alex nie udostępnia obecnie bezpiecznego wysyłania zadań. Przycisk przekazania jest zablokowany.');
+      ? 'Oryginalny Alex: protokół przyjęcia zadań dostępny. Wykonanie przez AI wymaga niezależnego potwierdzenia.'
+      : 'Oryginalny Alex: przekazywanie zadań niedostępne. Można nadal tworzyć, przeglądać i anulować lokalne zadania.');
+    return { checked: true, supported: alexDispatchSupported };
   } catch (error) {
-    setText('alex-dispatch-state', 'Nie można sprawdzić połączenia z oryginalnym Alexem: ' + error.message);
+    setText('alex-dispatch-state', 'Nie udało się sprawdzić oryginalnego Alexa: ' + error.message);
+    return { checked: false, supported: false };
   }
-  return alexDispatchSupported;
 }
 
 async function dispatchWorkToAlex(taskId, button) {
@@ -657,31 +789,43 @@ async function dispatchWorkToAlex(taskId, button) {
 }
 
 async function refreshWork() {
+  if (workRefreshPending) return false;
+  workRefreshPending = true;
   const button = document.getElementById('refresh-tasks');
-  if (button?.disabled) return;
-  if (button) {
-    button.disabled = true;
-    button.textContent = 'Łączenie…';
+  if (button) { button.disabled = true; button.textContent = 'Odświeżanie…'; }
+  setText('work-connection-state', 'Weryfikuję zadania, zdarzenia i połączenie z Alexem…');
+  try {
+    const [tasksError, eventsError, alexState] = await Promise.all([
+      loadTasks(), loadEvents(), refreshAlexCapabilities(),
+    ]);
+    // First list render may have happened before the capability response.
+    // Repaint from memory, do not issue a duplicate backend request.
+    if (!tasksError) renderTasks(cachedWorkTasks);
+    const error = tasksError || eventsError;
+    const label = error
+      ? error.status === 401
+        ? 'Work: brak autoryzacji (401). Sprawdź token operatora w konfiguracji API.'
+        : error.status === 403
+          ? 'Work: dostęp odrzucony (403).'
+          : error.status === 404
+            ? 'Work: wymagany endpoint nie istnieje w tym backendzie.'
+            : 'Work: brak pełnego połączenia z API. Szczegóły w komunikatach zadań i zdarzeń.'
+      : alexState.supported
+        ? 'Work: zadania i zdarzenia działają; oryginalny Alex przyjmuje zlecenia (praca AI niepotwierdzona).'
+        : alexState.checked
+          ? 'Work: zadania i zdarzenia działają. Zlecanie pracy oryginalnemu Alexowi jest niedostępne.'
+          : 'Work: zadania i zdarzenia działają. Połączenia z oryginalnym Alexem nie udało się zweryfikować.';
+    setText('work-connection-state', label);
+    if (button) button.textContent = error ? 'Ponów połączenie' : 'Odśwież';
+    return !error;
+  } catch (error) {
+    setText('work-connection-state', 'Work: błąd odświeżania: ' + error.message);
+    if (button) button.textContent = 'Ponów połączenie';
+    return false;
+  } finally {
+    workRefreshPending = false;
+    if (button) button.disabled = false;
   }
-  setText('work-connection-state', 'Ponowne łączenie z API…');
-  const [tasksError, eventsError] = await Promise.all([loadTasks(), loadEvents(), refreshAlexCapabilities()]);
-  // The buttons were initially rendered before reading actual remote capabilities.
-  if (!tasksError) await loadTasks();
-  const error = tasksError ?? eventsError;
-  setText('work-connection-state', error
-    ? error.status === 401
-      ? 'Brak autoryzacji — skonfiguruj DEBIAN13_API_TOKEN po stronie serwera proxy.'
-      : error.status === 403
-        ? 'Dostęp do Work został odrzucony przez API.'
-        : error.status === 404
-          ? 'Ten backend nie udostępnia części funkcji Work.'
-          : 'Połączenie z Work niedostępne. Użyj „Ponów połączenie”.'
-    : 'Połączono z API. Zadania i zdarzenia odświeżone.');
-  if (button) {
-    button.textContent = error ? 'Ponów połączenie' : 'Odśwież';
-    button.disabled = false;
-  }
-  return !error;
 }
 
 async function refreshTaskStatus(taskId, button) {
@@ -697,6 +841,11 @@ async function refreshTaskStatus(taskId, button) {
       status.textContent = payload.task.status;
       status.className = `task-state task-${payload.task.status}`;
     }
+    if (payload.alexSubmission) {
+      payload.task.alexSubmission = payload.alexSubmission;
+    }
+    cachedWorkTasks = cachedWorkTasks.map(task => task.id === taskId ? payload.task : task);
+    renderTasks(cachedWorkTasks);
     setText('work-connection-state', `Status zadania pobrany z API: ${payload.task.status}.`);
     setText('tasks-error', '');
   } catch (error) {
@@ -815,12 +964,43 @@ function setCollapsedSidebar(collapsed) {
   button.title = collapsed ? 'Rozwiń panel boczny' : 'Zwiń panel boczny';
 }
 
+function syncAgentChannel() {
+  const select = document.getElementById('chat-agent');
+  const channel = select?.value || 'aria';
+  const isGroup = channel === 'wszyscy';
+  for (const tile of document.querySelectorAll('[data-agent-channel]')) {
+    tile.setAttribute('aria-pressed', String(tile.dataset.agentChannel === channel));
+  }
+  const notice = document.getElementById('group-channel-notice');
+  if (notice) notice.hidden = !isGroup;
+  const submit = document.getElementById('chat-submit');
+  if (submit) submit.disabled = isGroup || Boolean(activeChatController);
+  const name = AGENT_PROFILES.find(a => a.id === channel)?.name || channel;
+  setText('agent-channel-feedback', isGroup
+    ? 'Wszyscy · oczekiwanie na prawdziwe dwukierunkowe API'
+    : 'Kanał ' + name + ' · status połączenia w kafelku');
+  setText('channel-status', isGroup
+    ? 'Wszyscy: wysyłanie zablokowane, dopóki brak API oryginalnych agentów.'
+    : 'Wiadomości kierowane do profilu ' + name + ' przez istniejące API.');
+}
+
 function bindNavigation() {
   const menu = document.getElementById('mobile-menu');
   const backdrop = document.getElementById('sidebar-backdrop');
   const collapse = document.getElementById('sidebar-collapse');
   const sidebar = document.getElementById('sidebar');
   const media = window.matchMedia('(max-width: 760px)');
+  document.querySelectorAll('[data-agent-channel]').forEach(tile => tile.addEventListener('click', () => {
+    const select = document.getElementById('chat-agent');
+    if (select) { select.value = tile.dataset.agentChannel; syncAgentChannel(); }
+    showView('chat');
+    setMobileSidebar(false);
+    document.getElementById('chat-message')?.focus();
+  }));
+  document.getElementById('chat-agent')?.addEventListener('change', syncAgentChannel);
+  document.getElementById('new-chat-inline')?.addEventListener('click', () =>
+    document.getElementById('new-chat')?.click());
+  syncAgentChannel();
   menu?.addEventListener('click', () => setMobileSidebar(!sidebar?.classList.contains('is-open')));
   backdrop?.addEventListener('click', () => setMobileSidebar(false));
   collapse?.addEventListener('click', () => {
@@ -958,6 +1138,10 @@ function bindChatForm() {
     const feedback = document.getElementById('chat-feedback');
     const text = message?.value.trim();
     if (!text || !agent || !feedback || activeChatController || visionBusy) return;
+    if (agent.value === 'wszyscy') {
+      feedback.textContent = 'Czat grupowy wymaga działającego, uwierzytelnionego API czterech agentów. Wiadomości nie wysłano.';
+      return;
+    }
     const file = attachment?.files?.[0] ?? null;
     if (file) {
       visionBusy = true;
@@ -1076,6 +1260,7 @@ function bindChatForm() {
       stop.disabled = false;
       stop.textContent = 'Zatrzymaj';
       await loadTasks();
+      syncAgentChannel();
     }
   });
   document.getElementById('chat-stop')?.addEventListener('click', async (event) => {
@@ -1142,27 +1327,215 @@ function bindWorkCreateForm() {
 function bindTerminalForm() {
   const form = document.getElementById('terminal-form');
   if (!form) return;
+  let activeController = null;
+  const stop = document.getElementById('terminal-stop');
+  const feedback = document.getElementById('terminal-feedback');
+  const liveStatus = document.getElementById('terminal-live-status');
+  const setStatus = (text) => { if (liveStatus) liveStatus.textContent = text; };
+  document.getElementById('terminal-clear')?.addEventListener('click', () => {
+    document.getElementById('terminal-output')?.replaceChildren();
+    setStatus('Ekran wyczyszczony · procesy nie zostały zmienione');
+  });
+  stop?.addEventListener('click', () => {
+    if (!activeController) return;
+    activeController.abort();
+    setStatus('Przerwano odbiór danych · serwer nie potwierdził zatrzymania');
+  });
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
     const commandInput = document.getElementById('terminal-command');
     const submit = document.getElementById('terminal-submit');
-    const feedback = document.getElementById('terminal-feedback');
     const command = commandInput?.value.trim();
-    if (!command || !feedback) return;
+    if (!command || !feedback || activeController) return;
+    const controller = new AbortController();
+    activeController = controller;
     submit.disabled = true;
-    feedback.textContent = 'Wysyłanie do ograniczonego API terminala…';
+    if (stop) stop.hidden = false;
+    setStatus('Łączenie z rzeczywistym terminalem…');
+    feedback.textContent = 'Oczekiwanie na odpowiedź API…';
+    const terminal = document.getElementById('terminal-output');
+    terminal?.querySelector('.terminal-hint')?.remove();
+    const heading = document.createElement('p');
+    heading.className = 'terminal-prompt';
+    heading.textContent = '$ ' + command;
+    const output = document.createElement('pre');
+    output.className = 'terminal-result';
+    output.textContent = '';
+    terminal?.append(heading, output);
+    let done = false;
+    let failed = false;
     try {
-      const result = await api.terminal(command);
-      if (typeof result.output !== 'string') throw new ApiError('API nie zwróciło wyniku tekstowego.');
-      renderTerminal(command, result.output);
-      commandInput.value = '';
-      feedback.textContent = 'Polecenie obsłużone bez uruchamiania powłoki.';
+      await api.terminalStream(command, ({ event, payload }) => {
+        if (event === 'meta') {
+          setStatus('Terminal LIVE · ' + (payload.command || 'polecenie'));
+          feedback.textContent = 'Odczyt rzeczywistego stdout/stderr…';
+        } else if (event === 'delta' && typeof payload.text === 'string') {
+          output.textContent += payload.text;
+          if (payload.stream === 'stderr') output.classList.add('terminal-error');
+          if (output.textContent.length > 1024 * 1024) {
+            throw new ApiError('Wynik jest zbyt obszerny.');
+          }
+          if (terminal) terminal.scrollTop = terminal.scrollHeight;
+        } else if (event === 'done') {
+          done = true;
+          const code = Number(payload.exitCode);
+          output.textContent += '\n[kod zakończenia: ' + code + ']';
+          if (code !== 0) output.classList.add('terminal-error');
+          setStatus('Zakończono · exit ' + code);
+        } else if (event === 'error') {
+          failed = true;
+          output.textContent += '\n[Błąd: ' + (payload.code || 'terminal_error') + ']';
+          output.classList.add('terminal-error');
+          setStatus('Błąd polecenia');
+        }
+      }, controller.signal);
+      if (!done && !failed) throw new ApiError('Nie otrzymano końcowego statusu polecenia.');
+      if (done) {
+        commandInput.value = '';
+        feedback.textContent = 'Zakończono rzeczywiste polecenie z listy dozwolonych.';
+      } else {
+        feedback.textContent = 'Backend zgłosił błąd. Nie potwierdzono sukcesu.';
+      }
     } catch (error) {
-      renderTerminal(command, error.message, true);
-      feedback.textContent = error.message;
+      if (error.name === 'AbortError') {
+        output.textContent += '\n[Odbiór anulowany lokalnie · stan serwera niepotwierdzony]';
+        feedback.textContent = 'Przerwano odbiór terminala.';
+      } else {
+        output.textContent += '\n[Błąd: ' + error.message + ']';
+        feedback.textContent = error.message;
+        setStatus('Niepowodzenie terminala');
+      }
+      output.classList.add('terminal-error');
     } finally {
+      activeController = null;
       submit.disabled = false;
-      await loadTasks();
+      if (stop) stop.hidden = true;
+      void loadTasks();
+    }
+  });
+}
+
+function bindInteractiveScripts() {
+  const select = document.getElementById('script-select');
+  const startForm = document.getElementById('script-start-form');
+  const answerForm = document.getElementById('script-answer-form');
+  const output = document.getElementById('script-live-output');
+  const question = document.getElementById('script-prompt');
+  const answerInput = document.getElementById('script-answer');
+  let active = null;
+  if (!select || !startForm || !answerForm || !output) return;
+  const draw = (state) => {
+    active = state.status === 'waiting_input' ? state : null;
+    output.textContent = [
+      'Skrypt: ' + state.scriptId,
+      'Status: ' + state.status,
+      'Etap: ' + state.step + '/' + state.stepCount,
+      ...(Array.isArray(state.output) ? state.output : []),
+    ].join('\n');
+    answerForm.hidden = !active;
+    if (active && question) question.textContent = state.prompt || 'Odpowiedz skryptowi';
+    if (active) answerInput?.focus();
+  };
+  api.listScripts().then((data) => {
+    select.replaceChildren();
+    for (const script of data.scripts || []) {
+      const option = document.createElement('option');
+      option.value = script.id;
+      option.textContent = script.name + ' — ' + script.description;
+      select.append(option);
+    }
+    if (!select.children.length) output.textContent = 'API nie udostępnia skryptów.';
+  }).catch((err) => {
+    select.replaceChildren();
+    output.textContent = 'Lista skryptów niedostępna: ' + err.message;
+  });
+  startForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (active) { output.textContent = 'Najpierw zakończ lub anuluj poprzedni skrypt.'; return; }
+    const button = document.getElementById('script-start');
+    if (button) button.disabled = true;
+    try { draw(await api.startScript(select.value)); }
+    catch (err) { output.textContent = 'Błąd uruchomienia: ' + err.message; }
+    finally { if (button) button.disabled = false; }
+  });
+  answerForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (!active || !answerInput?.value.trim()) return;
+    const id = active.sessionId;
+    const button = document.getElementById('script-answer-submit');
+    if (button) button.disabled = true;
+    try {
+      draw(await api.respondScript(id, answerInput.value.trim()));
+      answerInput.value = '';
+    } catch (err) { output.textContent = 'Błąd odpowiedzi: ' + err.message; }
+    finally { if (button) button.disabled = false; }
+  });
+  document.getElementById('script-cancel')?.addEventListener('click', async () => {
+    if (!active) return;
+    try { draw(await api.cancelScript(active.sessionId)); }
+    catch (err) { output.textContent = 'Błąd anulowania: ' + err.message; }
+  });
+}
+
+function bindWallpaper() {
+  const file = document.getElementById('wallpaper-file');
+  let current = '';
+  const reset = () => {
+    if (current) URL.revokeObjectURL(current);
+    current = '';
+    document.body.style.removeProperty('--user-wallpaper');
+  };
+  file?.addEventListener('change', () => {
+    const image = file.files?.[0];
+    if (!image) return;
+    if (!['image/png', 'image/jpeg', 'image/webp'].includes(image.type)
+        || image.size > 8 * 1024 * 1024) {
+      setText('wallpaper-feedback', 'Wybierz PNG/JPEG/WebP do 8 MB.');
+      file.value = '';
+      return;
+    }
+    reset();
+    current = URL.createObjectURL(image);
+    // Browser-local wallpaper. Not uploaded and not persisted to any server.
+    document.body.style.setProperty('--user-wallpaper', 'url("' + current + '")');
+    setText('wallpaper-feedback', 'Własna tapeta jest widoczna w bieżącej karcie. Nie wysłano jej na serwer.');
+  });
+  document.getElementById('wallpaper-reset')?.addEventListener('click', () => {
+    reset();
+    if (file) file.value = '';
+    setText('wallpaper-feedback', 'Przywrócono motyw domyślny.');
+  });
+}
+
+function bindBridgeForm() {
+  const form = document.getElementById('bridge-form');
+  const termBtn = document.getElementById('bridge-terminate');
+  if (!form) return;
+  let activeSessionId = '';
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const input = document.getElementById('bridge-message');
+    const output = document.getElementById('bridge-output');
+    const msg = input?.value.trim();
+    if (!msg || !output) return;
+    output.textContent = 'Wysyłanie zapytania przez AI Bridge (Gemini/OpenAI + MCP)…';
+    try {
+      const provider = document.getElementById('bridge-provider')?.value || 'openai';
+      const res = await api.bridge(msg, activeSessionId, provider === 'openai');
+      activeSessionId = res.sessionId;
+      output.textContent = `[Sesja: ${res.sessionId.slice(0, 8)} | Provider: ${res.provider}]\n\nOdpowiedź:\n${res.response}\n\n[MCP Diagnostics Status: ${res.mcpToolResult?.content?.[0]?.text ? 'Zaliczony' : 'Brak'}]`;
+    } catch (err) {
+      output.textContent = 'Błąd Bridge: ' + err.message;
+    }
+  });
+  termBtn?.addEventListener('click', async () => {
+    const output = document.getElementById('bridge-output');
+    try {
+      if (activeSessionId) await api.terminateBridge(activeSessionId);
+      activeSessionId = '';
+      if (output) output.textContent = 'Sesja została usunięta z pamięci backendu.';
+    } catch (err) {
+      if (output) output.textContent = 'Nie udało się zakończyć sesji: ' + err.message;
     }
   });
 }
@@ -1172,7 +1545,10 @@ if (typeof document !== 'undefined') {
   bindNavigation();
   bindChatForm();
   bindTerminalForm();
+  bindInteractiveScripts();
+  bindWallpaper();
   bindWorkCreateForm();
+  bindBridgeForm();
   renderHistory();
   document.getElementById('refresh-status')?.addEventListener('click', refreshDashboard);
   document.getElementById('refresh-tasks')?.addEventListener('click', refreshWork);
