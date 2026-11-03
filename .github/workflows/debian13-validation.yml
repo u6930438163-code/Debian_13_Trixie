@@ -49,7 +49,7 @@ jobs:
       - name: Test standalone Debian 13 API
         run: python3 -m unittest discover -s debian13/system/tests -p 'test_*.py' -v
       - name: Test Debian 13 UI proxy
-        run: node --test debian13/ui/dev_server.test.mjs
+        run: node --test debian13/ui/dev_server.test.mjs debian13/ui/design-smoke.test.mjs
       - name: Check private Codespaces AI launch script
         shell: bash
         run: |

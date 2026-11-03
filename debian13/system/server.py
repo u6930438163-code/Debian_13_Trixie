@@ -27,6 +27,9 @@ from work_store import WorkStore
 from original_agents import report as original_agents_report
 from alex_handoff import AlexHandoffError, capabilities as alex_capabilities, submit_task as submit_to_alex
 import mcp_server
+import interactive_scripts as scripts
+import system_observability as observability
+from agent_monitor import AgentMonitor
 from ai_bridge import BridgeError, execute_bridge_session, terminate_session
 
 MAX_BODY_BYTES = 16 * 1024
@@ -262,6 +265,52 @@ def run_terminal(command: str, workspace: Path) -> dict:
     }
 
 
+def terminal_events(command: str, workspace: Path):
+    """Real chunks from an allowlisted subprocess, without a shell or inherited secrets."""
+    argv = command_argv(command, workspace)
+    yield ("meta", {"command": argv[0].rsplit("/", 1)[-1], "mode": "live_readonly"})
+    try:
+        process = subprocess.Popen(
+            argv, cwd=workspace,
+            env={"HOME": str(workspace), "LANG": "C.UTF-8", "PATH": "/usr/bin:/bin"},
+            stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            close_fds=True, start_new_session=True,
+        )
+    except OSError:
+        yield ("error", {"code": "command_start_failed"})
+        return
+    selector = selectors.DefaultSelector()
+    for stream, name in ((process.stdout, "stdout"), (process.stderr, "stderr")):
+        selector.register(stream, selectors.EVENT_READ, name)
+    total = 0
+    deadline = time.monotonic() + COMMAND_TIMEOUT_SECONDS
+    try:
+        while selector.get_map() or process.poll() is None:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                yield ("error", {"code": "command_timeout"})
+                return
+            for key, _ in selector.select(min(0.2, remaining)):
+                chunk = os.read(key.fileobj.fileno(), 65536)
+                if not chunk:
+                    selector.unregister(key.fileobj)
+                    continue
+                total += len(chunk)
+                if total > MAX_OUTPUT_BYTES:
+                    yield ("error", {"code": "output_too_large"})
+                    return
+                yield ("delta", {"stream": key.data, "text": chunk.decode("utf-8", errors="replace")})
+        yield ("done", {"exitCode": process.wait()})
+    finally:
+        selector.close()
+        if process.poll() is None:
+            os.killpg(process.pid, signal.SIGKILL)
+            process.wait()
+        for stream in (process.stdout, process.stderr):
+            if stream:
+                stream.close()
+
+
 def validate_image(image: object) -> str:
     """Validate PNG/JPEG base64 and return a bounded data URI for the model."""
     if not isinstance(image, dict) or set(image) != {"mime_type", "base64"}:
@@ -383,7 +432,16 @@ class Debian13Server(http.server.ThreadingHTTPServer):
         self._alex_dispatch_lock = threading.Lock()
         self._rates: dict[str, tuple[float, int]] = {}
         self._rates_lock = threading.Lock()
+        self.agent_monitor = None
         super().__init__(address, SystemHandler)
+        if config.get("agent_monitor_enabled", False):
+            self.agent_monitor = AgentMonitor(
+                interval_seconds=config.get("agent_monitor_interval", 30))
+
+    def server_close(self):
+        if self.agent_monitor is not None:
+            self.agent_monitor.close()
+        super().server_close()
 
 
 class SystemHandler(http.server.BaseHTTPRequestHandler):
@@ -429,6 +487,28 @@ class SystemHandler(http.server.BaseHTTPRequestHandler):
         self.send_header("X-Content-Type-Options", "nosniff")
         self.end_headers()
         self.wfile.write(body)
+
+    def _send_terminal_stream(self, command: str) -> None:
+        # Validate BEFORE sending SSE headers so invalid commands retain HTTP errors.
+        command_argv(command, self.server.workspace)
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+        self.send_header("Cache-Control", "no-cache, no-store")
+        self.send_header("X-Accel-Buffering", "no")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("Connection", "close")
+        self.end_headers()
+        self.close_connection = True
+        events = terminal_events(command, self.server.workspace)
+        try:
+            for name, payload in events:
+                frame = "event: " + name + "\\n" + "data: " + json.dumps(payload, ensure_ascii=False) + "\\n\\n"
+                self.wfile.write(frame.encode("utf-8"))
+                self.wfile.flush()
+        except (BrokenPipeError, ConnectionResetError, OSError):
+            pass
+        finally:
+            events.close()
 
     def _authorize(self) -> bool:
         expected = "Bearer " + self.server.config["api_token"]
@@ -502,6 +582,12 @@ class SystemHandler(http.server.BaseHTTPRequestHandler):
             self.send_header("Cache-Control", "no-store")
             self.end_headers()
             return
+        if self.path == "/api/v1/diagnostics":
+            self._send_json(200, observability.snapshot(self.server))
+            return
+        if self.path == "/api/v1/scripts":
+            self._send_json(200, scripts.catalog())
+            return
         if self.path == "/v1/profiles":
             self._send_json(200, {
                 "profiles": [
@@ -556,7 +642,11 @@ class SystemHandler(http.server.BaseHTTPRequestHandler):
             ]})
             return
         if self.path == "/api/v1/tasks":
-            self._send_json(200, {"tasks": self.server.work_store.list_tasks(),
+            tasks = self.server.work_store.list_tasks()
+            for task in tasks:
+                if task.get("agent") == "alex":
+                    task["alexSubmission"] = self.server.work_store.get_alex_submission(task["id"])
+            self._send_json(200, {"tasks": tasks,
                                   "storage": "sqlite", "workersRunning": 0})
             return
         if self.path == "/api/v1/events":
@@ -648,6 +738,38 @@ class SystemHandler(http.server.BaseHTTPRequestHandler):
                 self._send_json(200, {"task": task})
                 return
             data = self._read_json(MAX_VISION_BODY_BYTES if self.path == "/v1/vision" else MAX_BODY_BYTES)
+            if self.path == "/api/v1/terminal/stream":
+                if set(data) != {"command"}:
+                    raise ApiError(400, "invalid_command", "Provide command only.")
+                self._send_terminal_stream(data["command"])
+                return
+            if self.path == "/api/v1/scripts/start":
+                if set(data) != {"scriptId"}:
+                    raise ApiError(400, "invalid_script", "Provide scriptId only.")
+                try:
+                    result = scripts.start(data["scriptId"])
+                except scripts.ScriptError as exc:
+                    raise ApiError(exc.status, exc.code, "Script request could not start.") from None
+                self._send_json(201, result)
+                return
+            if self.path == "/api/v1/scripts/respond":
+                if set(data) != {"sessionId", "answer"}:
+                    raise ApiError(400, "invalid_script", "Provide sessionId and answer.")
+                try:
+                    result = scripts.respond(data["sessionId"], data["answer"], self.server.workspace)
+                except scripts.ScriptError as exc:
+                    raise ApiError(exc.status, exc.code, "Script input was rejected.") from None
+                self._send_json(200, result)
+                return
+            if self.path == "/api/v1/scripts/cancel":
+                if set(data) != {"sessionId"}:
+                    raise ApiError(400, "invalid_script", "Provide sessionId.")
+                try:
+                    result = scripts.cancel(data["sessionId"])
+                except scripts.ScriptError as exc:
+                    raise ApiError(exc.status, exc.code, "Script cannot be cancelled.") from None
+                self._send_json(200, result)
+                return
             if self.path == "/api/v1/bridge":
                 if set(data) - {"sessionId", "message", "useOpenai"}:
                     raise ApiError(400, "invalid_bridge_request", "Unsupported bridge request fields.")
@@ -741,6 +863,8 @@ def load_config() -> dict:
         "model_name": os.environ.get("MODEL_NAME", ""),
         "vision_model_name": os.environ.get("VISION_MODEL_NAME", ""),
         "workspace": os.environ.get("WORKSPACE_DIR", "/workspace"),
+        "agent_monitor_enabled": os.environ.get("DEBIAN13_AGENT_MONITOR_ENABLED") == "1",
+        "agent_monitor_interval": 30,
         "host": os.environ.get("HOST", "127.0.0.1"),
         "port": int(os.environ.get("PORT", "8080")),
     }

@@ -25,6 +25,12 @@ API_PATHS = {
     ("POST", "/api/v1/chat/stream"),
     ("POST", "/api/v1/vision"),
     ("POST", "/api/v1/terminal"),
+    ("POST", "/api/v1/terminal/stream"),
+    ("GET", "/api/v1/scripts"),
+    ("GET", "/api/v1/diagnostics"),
+    ("POST", "/api/v1/scripts/start"),
+    ("POST", "/api/v1/scripts/respond"),
+    ("POST", "/api/v1/scripts/cancel"),
     ("POST", "/api/v1/bridge"),
     ("POST", "/api/v1/bridge/terminate"),
 }
@@ -41,6 +47,7 @@ API_SESSION_PATH = re.compile(
     r"/api/v1/sessions/[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/messages",
 )
 API_STREAM_PATH = "/api/v1/chat/stream"
+API_TERMINAL_STREAM_PATH = "/api/v1/terminal/stream"
 MAX_PROXY_BODY_BYTES = 16_384
 MAX_VISION_BODY_BYTES = 3 * 1024 * 1024
 MAX_PROXY_RESPONSE_BYTES = 1_048_576
@@ -53,6 +60,10 @@ class UiHandler(SimpleHTTPRequestHandler):
         super().__init__(*args, directory=str(UI_DIRECTORY), **kwargs)
 
     def end_headers(self) -> None:
+        # Never cache frontend assets while AI Studio/Codespaces previews are changing.
+        request_path = urlsplit(self.path).path
+        if request_path == "/" or request_path.endswith((".html", ".css", ".js", ".mjs")):
+            self.send_header("Cache-Control", "no-store")
         self.send_header(
             "Content-Security-Policy",
             "default-src 'self'; style-src 'self'; script-src 'self'; connect-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
@@ -111,7 +122,7 @@ class UiHandler(SimpleHTTPRequestHandler):
             api_port = int(os.environ.get("DEBIAN13_API_PORT", "8765"))
             if not 1 <= api_port <= 65535:
                 raise ValueError("Invalid API port")
-            timeout = MAX_STREAM_SECONDS if path in (API_STREAM_PATH, "/api/v1/vision") else 5
+            timeout = MAX_STREAM_SECONDS if path in (API_STREAM_PATH, API_TERMINAL_STREAM_PATH, "/api/v1/vision") else 5
             connection = http.client.HTTPConnection("127.0.0.1", api_port, timeout=timeout)
             headers = {}
             token = os.environ.get("DEBIAN13_API_TOKEN", "")
@@ -126,7 +137,7 @@ class UiHandler(SimpleHTTPRequestHandler):
             connection.request(self.command, upstream_path, body=body, headers=headers)
             response = connection.getresponse()
             if (
-                path == API_STREAM_PATH
+                path in (API_STREAM_PATH, API_TERMINAL_STREAM_PATH)
                 and response.status == 200
                 and response.getheader("Content-Type", "").lower().startswith("text/event-stream")
             ):
