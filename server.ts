@@ -292,7 +292,14 @@ app.post('/v1/chat/completions', (req, res, next) => {
 
 // Serve static frontend UI from debian13/ui directory
 const uiDir = path.join(__dirname, 'debian13/ui');
-app.use(express.static(uiDir));
+app.use(express.static(uiDir, {
+  setHeaders(res, filePath) {
+    // Prevent old HTML/CSS/JS from masking a new design after GitHub sync.
+    if (/\.(?:html|css|js|mjs)$/.test(filePath)) {
+      res.setHeader('Cache-Control', 'no-store');
+    }
+  },
+}));
 
 // Fallback to index.html for all other GET routes
 app.get('*', (_req, res) => {
