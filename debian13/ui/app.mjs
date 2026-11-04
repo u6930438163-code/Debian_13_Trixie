@@ -1328,6 +1328,24 @@ function bindTerminalForm() {
   const form = document.getElementById('terminal-form');
   if (!form) return;
   let activeController = null;
+  // Session-only CLI history: do not persist commands or potential secrets.
+  const commandHistory = [];
+  let historyIndex = 0;
+  let unfinishedCommand = '';
+  const commandField = document.getElementById('terminal-command');
+  commandField?.addEventListener('keydown', (event) => {
+    if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+    if (event.ctrlKey || event.altKey || event.metaKey || event.isComposing) return;
+    if (!commandHistory.length) return;
+    const field = event.currentTarget;
+    if (event.key === 'ArrowUp' && field.selectionStart !== 0) return;
+    if (event.key === 'ArrowDown' && field.selectionStart !== field.value.length) return;
+    event.preventDefault();
+    if (historyIndex === commandHistory.length) unfinishedCommand = field.value;
+    historyIndex = Math.max(0, Math.min(commandHistory.length, historyIndex + (event.key === 'ArrowUp' ? -1 : 1)));
+    field.value = historyIndex === commandHistory.length ? unfinishedCommand : commandHistory[historyIndex];
+    field.setSelectionRange(field.value.length, field.value.length);
+  });
   const stop = document.getElementById('terminal-stop');
   const feedback = document.getElementById('terminal-feedback');
   const liveStatus = document.getElementById('terminal-live-status');
@@ -1347,6 +1365,12 @@ function bindTerminalForm() {
     const submit = document.getElementById('terminal-submit');
     const command = commandInput?.value.trim();
     if (!command || !feedback || activeController) return;
+    if (commandHistory[commandHistory.length - 1] !== command) {
+      commandHistory.push(command);
+      if (commandHistory.length > 100) commandHistory.shift();
+    }
+    historyIndex = commandHistory.length;
+    unfinishedCommand = '';
     const controller = new AbortController();
     activeController = controller;
     submit.disabled = true;
