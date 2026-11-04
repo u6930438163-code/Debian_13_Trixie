@@ -1142,6 +1142,36 @@ function bindChatForm() {
       feedback.textContent = 'Czat grupowy wymaga działającego, uwierzytelnionego API czterech agentów. Wiadomości nie wysłano.';
       return;
     }
+    // Explicit CLI handoff: chat never silently executes model-generated shell commands.
+    // The existing authenticated terminal API remains the sole execution path.
+    if (/^\\/cli(?:\\s|$)/i.test(text)) {
+      if (attachment?.files?.length) {
+        feedback.textContent = 'Polecenie /cli nie obsługuje załączników. Usuń obraz i spróbuj ponownie.';
+        return;
+      }
+      const command = text.replace(/^\\/cli\\s*/i, '').trim();
+      if (!command) {
+        feedback.textContent = 'Użycie: /cli pwd lub /cli ls. Dostępne są tylko polecenia dozwolone przez serwer.';
+        return;
+      }
+      const terminalInput = document.getElementById('terminal-command');
+      const terminalForm = document.getElementById('terminal-form');
+      if (!terminalInput || !terminalForm) {
+        feedback.textContent = 'Konsola CLI jest niedostępna.';
+        return;
+      }
+      if (document.getElementById('terminal-submit')?.disabled) {
+        feedback.textContent = 'Konsola CLI wykonuje już polecenie. Poczekaj na zakończenie.';
+        return;
+      }
+      appendTranscript('user', 'Ty · polecenie CLI', command);
+      appendTranscript('assistant', 'Konsola CLI · przekazanie', 'Polecenie przekazano do terminala. Wynik i kod zakończenia pojawią się w widoku Terminal; to nie jest odpowiedź modelu AI.');
+      terminalInput.value = command;
+      message.value = '';
+      showView('terminal');
+      terminalForm.requestSubmit();
+      return;
+    }
     const file = attachment?.files?.[0] ?? null;
     if (file) {
       visionBusy = true;
