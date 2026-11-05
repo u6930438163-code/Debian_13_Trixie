@@ -63,7 +63,7 @@ class IntegrationTests(unittest.TestCase):
         self.assertEqual({tool["name"] for tool in listed["result"]["tools"]},
                          {"debian13_profiles", "debian13_diagnostics", "debian13_integrations",
                           "alex_existing_status", "alex_existing_tasks", "debian13_work_tasks",
-                          "debian13_original_agents"})
+                          "debian13_original_agents", "debian13_queue_work_task"})
         with patch.dict(os.environ, {
             "DEBIAN13_SYSTEM_API_URL": f"http://127.0.0.1:{self.api.server_port}",
             "DEBIAN13_API_TOKEN": TOKEN,
@@ -122,7 +122,7 @@ class IntegrationTests(unittest.TestCase):
         self.assertEqual(call(init, authed, method="GET")[0], 405)
         status, data = call(init, authed)
         self.assertEqual(status, 200)
-        self.assertEqual(data["result"]["serverInfo"]["name"], "debian13-readonly")
+        self.assertEqual(data["result"]["serverInfo"]["name"], "debian13-work-mcp")
         status, data = call({"jsonrpc": "2.0", "method": "notifications/initialized"}, authed)
         self.assertEqual((status, data), (202, None))
 
@@ -138,6 +138,65 @@ class IntegrationTests(unittest.TestCase):
         self.assertEqual(json.loads(reply["result"]["content"][0]["text"])["service"],
                          "debian13-system")
         self.assertNotIn(TOKEN, json.dumps(reply))
+
+    def test_stdio_mcp_enqueues_review_only_task(self):
+        task = {"agent": "aria", "kind": "development", "title": "Review GUI",
+                "description": "Review Hyperspace layout without executing changes"}
+        with patch.dict(os.environ, {
+            "DEBIAN13_SYSTEM_API_URL": f"http://127.0.0.1:{self.api.server_port}",
+            "DEBIAN13_API_TOKEN": TOKEN,
+        }):
+            reply = mcp_server.response({
+                "jsonrpc": "2.0", "id": 8, "method": "tools/call",
+                "params": {"name": "debian13_queue_work_task", "arguments": task},
+            })
+        self.assertFalse(reply["result"]["isError"])
+        receipt = json.loads(reply["result"]["content"][0]["text"])
+        self.assertEqual(receipt["task"]["agent"], "aria")
+        self.assertEqual(receipt["task"]["status"], "queued")
+        self.assertEqual(receipt["task"]["execution"], "not_started")
+        self.assertEqual(receipt["task"]["requires_approval"], 1)
+        self.assertFalse(receipt["executionStarted"])
+        self.assertEqual(len(self.api.work_store.list_tasks()), 1)
+
+    def test_http_mcp_queues_task_only_with_operator_bearer(self):
+        task = {"agent": "alex", "kind": "bugfix", "title": "Review CI",
+                "description": "Investigate test failures without running commands"}
+        request = {"jsonrpc": "2.0", "id": 9, "method": "tools/call",
+                   "params": {"name": "debian13_queue_work_task", "arguments": task}}
+        headers = {"Content-Type": "application/json",
+                   "Accept": "application/json, text/event-stream",
+                   "Authorization": "Bearer " + TOKEN}
+
+        def call(query, authorized=True):
+            connection = http.client.HTTPConnection(*self.api.server_address, timeout=5)
+            try:
+                actual_headers = headers if authorized else {
+                    key: value for key, value in headers.items() if key != "Authorization"
+                }
+                connection.request("POST", "/mcp", body=json.dumps(query), headers=actual_headers)
+                response = connection.getresponse()
+                return response.status, json.loads(response.read())
+            finally:
+                connection.close()
+
+        self.assertEqual(call(request, authorized=False)[0], 401)
+        bad = {"jsonrpc": "2.0", "id": 10, "method": "tools/call",
+               "params": {"name": "debian13_queue_work_task",
+                          "arguments": {**task, "command": "id"}}}
+        status, error = call(bad)
+        self.assertEqual(status, 200)
+        self.assertEqual(error["error"]["code"], -32602)
+        self.assertEqual(len(self.api.work_store.list_tasks()), 0)
+        status, response = call(request)
+        self.assertEqual(status, 200)
+        self.assertFalse(response["result"]["isError"])
+        receipt = json.loads(response["result"]["content"][0]["text"])
+        self.assertFalse(receipt["executionStarted"])
+        self.assertEqual(receipt["task"]["agent"], "alex")
+        self.assertEqual(receipt["task"]["status"], "queued")
+        self.assertEqual(len(self.api.work_store.list_tasks()), 1)
+        self.assertNotIn(TOKEN, json.dumps(response))
 
     def test_mcp_rejects_unknown_and_mutating_tools(self):
         result = mcp_server.response({

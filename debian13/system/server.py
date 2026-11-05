@@ -606,8 +606,8 @@ class SystemHandler(http.server.BaseHTTPRequestHandler):
             return
         if self.path in ("/v1/integrations", "/api/v1/integrations"):
             self._send_json(200, {"integrations": [
-                {"id": "mcp", "name": "MCP", "status": "stdio_available",
-                 "connected": False, "description": "Read-only MCP stdio bridge; client connection not verified."},
+                {"id": "mcp", "name": "MCP", "status": "read_and_queue_available",
+                 "connected": False, "description": "MCP reads and review-only Work queue writes available; external client not verified."},
                 {"id": "gpt_actions", "name": "GPT Actions", "status": "schema_available",
                  "connected": False, "description": "OpenAPI document available; HTTPS deployment and GPT setup required."},
                 {"id": "codex", "name": "Codex", "status": "workflow_available",
@@ -692,7 +692,12 @@ class SystemHandler(http.server.BaseHTTPRequestHandler):
                 if "application/json" not in accept or "text/event-stream" not in accept:
                     raise ApiError(406, "invalid_accept", "MCP requires JSON and SSE in Accept.")
                 message = self._read_json()
-                result = mcp_server.response(message)
+                def queue_task(arguments):
+                    task = self.server.work_store.create_task(
+                        arguments["kind"], arguments["agent"],
+                        arguments["title"], arguments["description"])
+                    return {"task": task, "executionStarted": False}
+                result = mcp_server.response(message, task_writer=queue_task)
                 if result is None:
                     self.send_response(202)
                     self.send_header("Content-Length", "0")

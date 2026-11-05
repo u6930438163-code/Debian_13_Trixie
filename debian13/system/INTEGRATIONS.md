@@ -7,12 +7,21 @@ until an external client or worker is verified.
 
 ## 1. MCP: stdio and authenticated Streamable HTTP
 
-The read-only implementation at `debian13/system/mcp_server.py` supports these
-tools: `debian13_profiles`, `debian13_diagnostics`,
+The MCP implementation at `debian13/system/mcp_server.py` supports these
+read-only tools: `debian13_profiles`, `debian13_diagnostics`,
 `debian13_integrations`, `debian13_work_tasks`,
 `debian13_original_agents`, `alex_existing_status`, and
-`alex_existing_tasks`. No tool runs shell commands, modifies files,
-grants root privileges or purchases anything.
+`alex_existing_tasks`. An additional authenticated write tool, `debian13_queue_work_task`, accepts
+`agent` (alex/aria/astyria/aurelius), `kind` (development/bugfix/audit/
+research), `title` (1–120 chars) and `description` (1–2000 chars).
+It creates a review-only task in the SQLite Work queue, returning
+`status: queued`, `executionStarted: false` and `requires_approval: 1`.
+Both stdio MCP (via authorized HTTP API) and HTTP MCP (via the authenticated
+backend Work store) support queueing. This is **not autonomous execution**:
+it does not run a model, shell commands, edit files, grant root, execute
+GitHub writes or make purchases. All other MCP tools are read-only.
+A deployed, authorized client and verified original agent workers are
+needed before treating this as a live bidirectional AI integration.
 
 **Local stdio:** start the application first:
 
