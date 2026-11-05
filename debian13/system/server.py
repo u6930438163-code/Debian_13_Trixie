@@ -659,7 +659,37 @@ class SystemHandler(http.server.BaseHTTPRequestHandler):
                         arguments["kind"], arguments["agent"],
                         arguments["title"], arguments["description"])
                     return {"task": task, "executionStarted": False}
-                result = mcp_server.response(message, task_writer=queue_task)
+
+                def read_task(arguments):
+                    task = self.server.work_store.get_task(arguments["task_id"])
+                    if task is None:
+                        raise ValueError("Task not found")
+                    return {"task": task}
+
+                def cancel_task(arguments):
+                    with self.server._alex_dispatch_lock:
+                        if self.server.work_store.get_alex_submission(arguments["task_id"]):
+                            raise ValueError("Task already handed off")
+                        task = self.server.work_store.cancel_task(arguments["task_id"])
+                    if task is None:
+                        raise ValueError("Task not found")
+                    return {"task": task, "executionStarted": False}
+
+                def chat_with_model(arguments):
+                    try:
+                        content, model = complete_chat(
+                            arguments["agent"], arguments["message"], self.server.config)
+                    except ApiError:
+                        # No synthetic replies and no error details or credentials in MCP.
+                        raise ValueError("Model not available") from None
+                    return {"agent": arguments["agent"], "reply": content,
+                            "model": model, "source": "configured_model_provider",
+                            "originalAgentExecutionVerified": False,
+                            "sessionPersisted": False}
+
+                result = mcp_server.response(
+                    message, task_writer=queue_task, detail_reader=read_task,
+                    cancel_writer=cancel_task, chat_writer=chat_with_model)
                 if result is None:
                     self.send_response(202)
                     self.send_header("Content-Length", "0")
