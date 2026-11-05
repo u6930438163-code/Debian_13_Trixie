@@ -14,6 +14,7 @@ RUN apt-get update \
     && useradd --system --uid 10001 --gid debian13 --home-dir /workspace --no-create-home --shell /usr/sbin/nologin debian13 \
     && install -d -o debian13 -g debian13 -m 0750 /workspace
 
+COPY --chown=root:root svl_core.py /opt/debian13/system/svl_core.py
 COPY --chown=root:root server.py /opt/debian13/system/server.py
 COPY --chown=root:root work_store.py /opt/debian13/system/work_store.py
 COPY --chown=root:root readiness.py /opt/debian13/system/readiness.py
@@ -27,7 +28,10 @@ COPY --chown=root:root alex_handoff.py /opt/debian13/system/alex_handoff.py
 COPY --chown=root:root original_agents.py /opt/debian13/system/original_agents.py
 COPY --chown=root:root integration_smoke.py /opt/debian13/system/integration_smoke.py
 COPY --chown=root:root gpt-actions.openapi.json /opt/debian13/system/gpt-actions.openapi.json
-RUN chmod 0644 /opt/debian13/system/system_observability.py /opt/debian13/system/agent_monitor.py /opt/debian13/system/interactive_scripts.py /opt/debian13/system/ai_bridge.py /opt/debian13/system/server.py /opt/debian13/system/work_store.py /opt/debian13/system/readiness.py /opt/debian13/system/mcp_server.py /opt/debian13/system/alex_bridge.py /opt/debian13/system/alex_handoff.py /opt/debian13/system/original_agents.py /opt/debian13/system/gpt-actions.openapi.json /opt/debian13/system/integration_smoke.py
+RUN chmod 0644 /opt/debian13/system/svl_core.py /opt/debian13/system/system_observability.py /opt/debian13/system/agent_monitor.py /opt/debian13/system/interactive_scripts.py /opt/debian13/system/ai_bridge.py /opt/debian13/system/server.py /opt/debian13/system/work_store.py /opt/debian13/system/readiness.py /opt/debian13/system/mcp_server.py /opt/debian13/system/alex_bridge.py /opt/debian13/system/alex_handoff.py /opt/debian13/system/original_agents.py /opt/debian13/system/gpt-actions.openapi.json /opt/debian13/system/integration_smoke.py
+
+# Regression check: server's SVL kernel import must work in the built image.
+RUN cd /opt/debian13/system && python3 -c 'from svl_core import kernel; assert kernel is not None'
 
 USER 10001:10001
 EXPOSE 8080
