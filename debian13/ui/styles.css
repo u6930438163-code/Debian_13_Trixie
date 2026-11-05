@@ -1862,3 +1862,196 @@ body::before {
   .diagnostic-kpi { padding:10px; }
   .diagnostic-kpi strong { font-size:18px; margin:8px 0 5px; }
 }
+
+
+/* Astyria design studio – original Debian 13 palette + the Trixie cosmic themes.
+   Controls are browser-local; no provider or worker is implied by the chosen theme. */
+:root[data-design-theme="bastilla-shan"] {
+  --design-accent: #b8a5ff;
+  --design-secondary: #8bd6ff;
+  --design-panel: rgba(12, 17, 32, .88);
+  --design-border: rgba(164, 138, 253, .31);
+  --design-wash: rgba(147, 121, 238, .16);
+  --design-label: #e2dbff;
+  --accent: #b8a5ff;
+  --focus: #c8a6ff;
+}
+:root[data-design-theme="original-mint"] {
+  --design-accent: #75d6c2;
+  --design-secondary: #a0f1e0;
+  --design-panel: rgba(16, 25, 39, .92);
+  --design-border: rgba(117, 214, 194, .35);
+  --design-wash: rgba(42, 138, 131, .16);
+  --design-label: #c6fff0;
+  --surface: #101927;
+  --surface-raised: #141f30;
+  --border: #26364b;
+  --muted: #aabcc5;
+  --accent: #75d6c2;
+  --focus: #8be8d5;
+}
+:root[data-design-theme="astyria-cosmic"] {
+  --design-accent: #38bdf8;
+  --design-secondary: #93c5fd;
+  --design-panel: rgba(11, 19, 34, .91);
+  --design-border: rgba(56, 189, 248, .32);
+  --design-wash: rgba(56, 189, 248, .13);
+  --design-label: #d4f1ff;
+  --surface: #0b1322;
+  --surface-raised: #111b2e;
+  --border: #1e293b;
+  --muted: #a7bad0;
+  --accent: #38bdf8;
+  --focus: #7dd3fc;
+}
+:root[data-design-theme] .workspace-view {
+  background: var(--design-panel);
+  border-color: var(--design-border);
+}
+:root[data-design-theme] .sidebar {
+  border-color: var(--design-border);
+}
+:root[data-design-theme] .eyebrow,
+:root[data-design-theme] .transcript-heading,
+:root[data-design-theme] .nav-button.is-active,
+:root[data-design-theme] .nav-button.is-active .nav-icon,
+:root[data-design-theme] .new-chat-button {
+  color: var(--design-accent);
+}
+:root[data-design-theme] .brand-mark,
+:root[data-design-theme] .nav-button.is-active,
+:root[data-design-theme] .new-chat-button {
+  border-color: var(--design-border);
+  background: var(--design-wash);
+}
+:root[data-design-theme] .agent-tile[aria-pressed="true"] {
+  border-color: var(--design-accent);
+  background: var(--design-wash);
+}
+:root[data-design-theme] .button-primary {
+  background: linear-gradient(120deg, var(--design-accent), var(--design-secondary));
+  color: #07101d;
+}
+:root[data-design-theme] .composer textarea:focus-visible,
+:root[data-design-theme] .message-reaction[aria-pressed="true"] {
+  border-color: var(--design-accent);
+}
+:root[data-design-theme] .message-reaction[aria-pressed="true"] {
+  background: var(--design-wash);
+  color: var(--design-label);
+}
+:root[data-design-theme="original-mint"] body::before {
+  background-image:
+    linear-gradient(135deg, rgba(3, 15, 20, .84), rgba(8, 35, 43, .70) 50%, rgba(3, 17, 27, .86)),
+    var(--user-wallpaper, radial-gradient(ellipse at 70% 16%, #2f716d 1%, transparent 48%)),
+    radial-gradient(1px 1px at 17% 12%, #c6f7eb, transparent),
+    radial-gradient(2px 2px at 74% 71%, #88d6d0, transparent),
+    linear-gradient(135deg, #08151e, #152a32 66%, #0a202b);
+}
+:root[data-design-theme="astyria-cosmic"] body::before {
+  background-image:
+    linear-gradient(135deg, rgba(3, 9, 22, .82), rgba(9, 31, 49, .72) 50%, rgba(3, 10, 25, .86)),
+    var(--user-wallpaper, radial-gradient(ellipse at 74% 14%, #235b7c 1%, transparent 46%)),
+    radial-gradient(1px 1px at 17% 12%, #f3faff, transparent),
+    radial-gradient(2px 2px at 74% 71%, #8bd6ff, transparent),
+    linear-gradient(135deg, #050811, #0b2742 66%, #081622);
+}
+
+/* Design selector is part of the *live* HTML GUI, not the unused React demo. */
+.design-studio {
+  margin: 0 0 16px;
+  padding: clamp(12px, 2vw, 19px);
+  border: 1px solid var(--design-border, #424568);
+  border-radius: 16px;
+  background: linear-gradient(145deg, var(--design-wash, rgba(147, 121, 238, .15)), rgba(7, 15, 31, .55));
+}
+.design-studio-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.design-studio-heading h3 { margin: 0 0 8px; }
+.design-theme-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 12px 0;
+}
+.design-theme-option {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  text-align: left;
+  gap: 6px;
+  padding: 9px;
+  border: 1px solid rgba(151, 164, 191, .33);
+  border-radius: 13px;
+  background: rgba(7, 14, 29, .77);
+  color: #ecf3ff;
+  cursor: pointer;
+}
+.design-theme-option:hover { border-color: #b8c5de; }
+.design-theme-option[aria-pressed="true"] {
+  border-color: var(--design-accent, #b8a5ff);
+  box-shadow: inset 0 0 0 1px var(--design-accent, #b8a5ff);
+}
+.design-theme-option strong { font-size: 12px; }
+.design-theme-option small { font-size: 10px; color: #c3cbdb; }
+.design-theme-preview {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+  height: 66px;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 9px;
+  border: 1px solid rgba(255,255,255,.13);
+}
+.design-theme-preview i {
+  display: block;
+  height: 6px;
+  border-radius: 10px;
+  opacity: .94;
+}
+.design-theme-preview i:first-child { width: 45%; height: 9px; }
+.design-theme-preview i:nth-child(2) { width: 85%; }
+.design-theme-preview i:last-child { width: 68%; }
+.theme-bastilla { background: linear-gradient(130deg, #17102b, #223653); }
+.theme-bastilla i { background: #b8a5ff; }
+.theme-original { background: linear-gradient(130deg, #101927, #184444); }
+.theme-original i { background: #75d6c2; }
+.theme-astyria { background: linear-gradient(130deg, #050811, #15415e); }
+.theme-astyria i { background: #38bdf8; }
+.chat-heading-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+:root[data-chat-focus="true"] .chat-view .agent-tiles,
+:root[data-chat-focus="true"] .chat-view .chat-workspace-subtitle {
+  display: none;
+}
+:root[data-chat-focus="true"] .chat-view {
+  padding-top: 10px;
+}
+:root[data-chat-focus="true"] .chat-view .transcript {
+  flex: 1 1 auto;
+}
+:root[data-chat-focus="true"] #chat-focus-toggle {
+  border-color: var(--design-accent, #b8a5ff);
+  background: var(--design-wash, rgba(147, 121, 238, .15));
+}
+@media (max-width: 760px) {
+  .design-theme-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
+  .design-theme-option { padding: 6px; }
+  .design-theme-option strong { font-size: 10px; }
+  .design-theme-option small { font-size: 9px; }
+  .design-theme-preview { height: 48px; }
+  .chat-heading-actions { gap: 4px; }
+  #chat-focus-toggle, #new-chat-inline { min-height: 34px; font-size: 10px; padding: 6px 8px; }
+}
+@media (max-width: 365px) {
+  .design-theme-grid { grid-template-columns: 1fr; }
+  .design-theme-option { display: grid; grid-template-columns: 75px minmax(0,1fr); align-items: center; }
+  .design-theme-preview { grid-row: span 2; }
+}
