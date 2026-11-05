@@ -110,15 +110,11 @@ def execute_bridge_session(session_id: str, prompt: str, use_openai: bool = True
     if session_id not in SESSIONS:
         if len(SESSIONS) >= MAX_SESSIONS:
             raise BridgeError(429, "session_limit")
-        SESSIONS[session_id] = [{
-            "role": "system",
-            "content": "You are a cooperative AI assistant in Debian 13 Trixie alongside read-only MCP tools.",
-        }]
+        SESSIONS[session_id] = []
     history = SESSIONS[session_id]
     user_message = {"role": "user", "content": prompt.strip()}
+    # Preserve conversation only; never inject a fixed model identity or behavior.
     messages = [*history, user_message][-MAX_HISTORY_MESSAGES:]
-    if history and history[0]["role"] == "system":
-        messages = [history[0], *[m for m in messages if m is not history[0]]]
 
     try:
         if use_openai:
@@ -135,8 +131,8 @@ def execute_bridge_session(session_id: str, prompt: str, use_openai: bool = True
         raise BridgeError(502, "empty_provider_response")
 
     history.extend([user_message, {"role": "assistant", "content": response_text.strip()}])
-    if len(history) > MAX_HISTORY_MESSAGES + 1:
-        SESSIONS[session_id] = [history[0], *history[-MAX_HISTORY_MESSAGES:]]
+    if len(history) > MAX_HISTORY_MESSAGES:
+        SESSIONS[session_id] = history[-MAX_HISTORY_MESSAGES:]
 
     mcp_tool_result = {}
     try:
