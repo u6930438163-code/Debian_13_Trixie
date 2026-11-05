@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Debian 13 MCP server with read-only tools and authenticated Work queue write (JSON-RPC, newline delimited).
+"""Debian 13 MCP with authenticated review-queue and model-chat tools (JSON-RPC).
 
 Configure DEBIAN13_SYSTEM_API_URL and DEBIAN13_API_TOKEN in the MCP client
 process. Never put secrets in MCP arguments, stdout, or repository files.
@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 import urllib.error
 import urllib.parse
@@ -29,6 +30,23 @@ TOOLS = {
 }
 MAX_RESPONSE = 262144
 WORK_TOOL = "debian13_queue_work_task"
+TASK_DETAIL_TOOL = "debian13_work_task_detail"
+CANCEL_TOOL = "debian13_cancel_work_task"
+CHAT_TOOL = "debian13_chat_agent"
+TASK_ID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")
+TASK_ID_SCHEMA = {
+    "type": "object", "properties": {
+        "task_id": {"type": "string", "pattern": TASK_ID.pattern},
+    },
+    "required": ["task_id"], "additionalProperties": False,
+}
+CHAT_SCHEMA = {
+    "type": "object", "properties": {
+        "agent": {"type": "string", "enum": ["alex", "aria", "astyria", "aurelius"]},
+        "message": {"type": "string", "minLength": 1, "maxLength": 4000},
+    },
+    "required": ["agent", "message"], "additionalProperties": False,
+}
 WORK_AGENTS = ("alex", "aria", "astyria", "aurelius")
 WORK_KINDS = ("development", "bugfix", "audit", "research")
 WORK_SCHEMA = {
@@ -57,6 +75,26 @@ def validate_work_task(arguments: object) -> dict:
     return {"agent": agent, "kind": kind, "title": title.strip(),
             "description": description.strip()}
 
+
+
+
+def validate_task_id(arguments: object) -> dict:
+    if not isinstance(arguments, dict) or set(arguments) != {"task_id"}:
+        raise ValueError("Invalid task id arguments")
+    value = arguments["task_id"]
+    if not isinstance(value, str) or not TASK_ID.fullmatch(value):
+        raise ValueError("Invalid task identifier")
+    return {"task_id": value}
+
+
+def validate_agent_chat(arguments: object) -> dict:
+    if not isinstance(arguments, dict) or set(arguments) != {"agent", "message"}:
+        raise ValueError("Invalid agent chat arguments")
+    agent, message = arguments["agent"], arguments["message"]
+    if (not isinstance(agent, str) or agent not in WORK_AGENTS
+            or not isinstance(message, str) or not 1 <= len(message.strip()) <= 4000):
+        raise ValueError("Invalid agent chat arguments")
+    return {"agent": agent, "message": message.strip()}
 
 
 def api_base() -> str:
@@ -96,6 +134,60 @@ def read_api(path: str) -> dict:
     return result
 
 
+
+def post_api(path: str, payload: dict | None = None) -> dict:
+    """Authenticated API call; no redirects, no arbitrary paths or URLs."""
+    token = os.environ.get("DEBIAN13_API_TOKEN", "")
+    if len(token) < 32 or any(ord(c) < 33 or ord(c) > 126 for c in token):
+        raise ValueError("Invalid MCP operator credential")
+    if path not in ("/v1/chat",) and not re.fullmatch(
+            r"/api/v1/tasks/" + TASK_ID.pattern[1:-1] + r"/cancel", path):
+        raise ValueError("Unsupported API action")
+    request = urllib.request.Request(
+        api_base() + path,
+        data=json.dumps(payload).encode("utf-8") if payload is not None else b"",
+        headers={"Authorization": "Bearer " + token,
+                 "Accept": "application/json", "Content-Type": "application/json"},
+        method="POST",
+    )
+    opener = urllib.request.build_opener(urllib.request.HTTPHandler, urllib.request.HTTPSHandler, NoRedirect)
+    with opener.open(request, timeout=115 if path == "/v1/chat" else 10) as reply:
+        raw = reply.read(MAX_RESPONSE + 1)
+    if len(raw) > MAX_RESPONSE:
+        raise ValueError("API response too large")
+    value = json.loads(raw)
+    if not isinstance(value, dict):
+        raise ValueError("Invalid API response")
+    return value
+
+
+def chat_agent(payload: dict) -> dict:
+    """Call the configured real model; do not claim it is an original autonomous worker."""
+    value = post_api("/v1/chat", {"profile": payload["agent"], "message": payload["message"]})
+    if (value.get("profile") != payload["agent"] or
+            not isinstance(value.get("content"), str) or not value["content"].strip() or
+            not isinstance(value.get("model"), str)):
+        raise ValueError("Invalid model response")
+    return {"agent": value["profile"], "reply": value["content"],
+            "model": value["model"], "source": "configured_model_provider",
+            "originalAgentExecutionVerified": False,
+            "sessionPersisted": False}
+
+
+def cancel_work_task(payload: dict) -> dict:
+    value = post_api("/api/v1/tasks/" + payload["task_id"] + "/cancel")
+    if not isinstance(value.get("task"), dict) or value["task"].get("id") != payload["task_id"]:
+        raise ValueError("Invalid cancellation receipt")
+    return {"task": value["task"], "executionStarted": False}
+
+
+def task_detail(payload: dict) -> dict:
+    value = read_api("/api/v1/tasks/" + payload["task_id"])
+    if not isinstance(value.get("task"), dict) or value["task"].get("id") != payload["task_id"]:
+        raise ValueError("Invalid task receipt")
+    return value
+
+
 def queue_work_task(payload: dict) -> dict:
     """Queue via the authenticated local API; never execute a task."""
     token = os.environ.get("DEBIAN13_API_TOKEN", "")
@@ -119,7 +211,8 @@ def queue_work_task(payload: dict) -> dict:
     return result
 
 
-def response(request: dict, task_writer=None) -> dict | None:
+def response(request: dict, task_writer=None, chat_writer=None, cancel_writer=None,
+             detail_reader=None) -> dict | None:
     request_id = request.get("id")
     method = request.get("method")
     if not isinstance(method, str):
@@ -132,7 +225,7 @@ def response(request: dict, task_writer=None) -> dict | None:
         result = {
             "protocolVersion": PROTOCOL_VERSION,
             "capabilities": {"tools": {"listChanged": False}},
-            "serverInfo": {"name": "debian13-work-mcp", "version": "0.2.0"},
+            "serverInfo": {"name": "debian13-work-mcp", "version": "0.3.0"},
         }
     elif method == "ping":
         result = {}
@@ -152,15 +245,41 @@ def response(request: dict, task_writer=None) -> dict | None:
             "inputSchema": WORK_SCHEMA,
             "annotations": {"readOnlyHint": False, "destructiveHint": False,
                             "idempotentHint": False},
+        }, {
+            "name": TASK_DETAIL_TOOL,
+            "description": "Read a task by UUID from the persistent Debian 13 Work queue.",
+            "inputSchema": TASK_ID_SCHEMA,
+            "annotations": {"readOnlyHint": True, "destructiveHint": False},
+        }, {
+            "name": CANCEL_TOOL,
+            "description": "Cancel an unsubmitted Work task by UUID; cannot recall tasks sent to Alex.",
+            "inputSchema": TASK_ID_SCHEMA,
+            "annotations": {"readOnlyHint": False, "destructiveHint": True, "idempotentHint": True},
+        }, {
+            "name": CHAT_TOOL,
+            "description": (
+                "Ask the configured model on behalf of a selected agent profile; "
+                "returns a real model response only if a provider is configured. "
+                "Does not verify the owner's original worker or persist a conversation. "
+                "Model API may have usage costs; does not execute system commands."
+            ),
+            "inputSchema": CHAT_SCHEMA,
+            "annotations": {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False,
+                            "openWorldHint": True},
         }]}
     elif method == "tools/call":
         params = request.get("params")
-        if not isinstance(params, dict) or params.get("name") not in (*TOOLS, WORK_TOOL):
+        if not isinstance(params, dict) or params.get("name") not in (
+                *TOOLS, WORK_TOOL, TASK_DETAIL_TOOL, CANCEL_TOOL, CHAT_TOOL):
             return {"jsonrpc": "2.0", "id": request_id, "error": {"code": -32602, "message": "Unknown tool"}}
         name, arguments = params["name"], params.get("arguments", {})
         try:
             if name == WORK_TOOL:
                 validated = validate_work_task(arguments)
+            elif name in (TASK_DETAIL_TOOL, CANCEL_TOOL):
+                validated = validate_task_id(arguments)
+            elif name == CHAT_TOOL:
+                validated = validate_agent_chat(arguments)
             elif arguments != {}:
                 raise ValueError("Unexpected arguments for read tool")
         except ValueError:
@@ -170,13 +289,27 @@ def response(request: dict, task_writer=None) -> dict | None:
                 value = task_writer(validated) if task_writer is not None else queue_work_task(validated)
                 if not isinstance(value, dict) or value.get("executionStarted") is not False:
                     raise ValueError("Invalid task receipt")
+            elif name == TASK_DETAIL_TOOL:
+                value = detail_reader(validated) if detail_reader is not None else task_detail(validated)
+                if not isinstance(value, dict) or value.get("task", {}).get("id") != validated["task_id"]:
+                    raise ValueError("Invalid task detail")
+            elif name == CANCEL_TOOL:
+                value = cancel_writer(validated) if cancel_writer is not None else cancel_work_task(validated)
+                if not isinstance(value, dict) or value.get("task", {}).get("id") != validated["task_id"]:
+                    raise ValueError("Invalid cancellation receipt")
+            elif name == CHAT_TOOL:
+                value = chat_writer(validated) if chat_writer is not None else chat_agent(validated)
+                if (not isinstance(value, dict) or value.get("agent") != validated["agent"]
+                        or not isinstance(value.get("reply"), str) or not value["reply"].strip()
+                        or value.get("originalAgentExecutionVerified") is not False):
+                    raise ValueError("Invalid agent model response")
             else:
                 path = TOOLS[name][1]
                 value = read_existing_alex(name) if path.startswith("alex:") else read_api(path)
             result = {"content": [{"type": "text", "text": json.dumps(value, ensure_ascii=False)}], "isError": False}
-        except (ValueError, OSError, urllib.error.URLError, json.JSONDecodeError) as exc:
-            # Do not echo URLs, bearer credentials, response bodies, or internals.
-            result = {"content": [{"type": "text", "text": "The configured Debian 13 or existing Alex API is unavailable or invalid."}], "isError": True}
+        except (ValueError, OSError, urllib.error.URLError, json.JSONDecodeError):
+            # Do not echo URLs, bearer credentials, responses, or internals.
+            result = {"content": [{"type": "text", "text": "The configured Debian 13 API or model is unavailable or invalid."}], "isError": True}
     else:
         return {"jsonrpc": "2.0", "id": request_id, "error": {"code": -32601, "message": "Method not found"}}
     return {"jsonrpc": "2.0", "id": request_id, "result": result}
