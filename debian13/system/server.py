@@ -317,14 +317,17 @@ def complete_chat(profile: str, message: str, config: dict, image: str | None = 
         # Ollama's /v1 Chat Completions docs use a string image_url.
         {"type": "image_url", "image_url": image if is_ollama else {"url": image}},
     ]
-    payload = json.dumps({
+    body = {
         "model": model,
         # No forced personality, specialty, root claims or system prompt.
         # The actual provider handles its model's base behavior; API tools
         # still enforce real permissions independently from chat output.
         "messages": [{"role": "user", "content": user_content}],
-        "temperature": 0.2,
-    }).encode("utf-8")
+    }
+    # Gemini 3.x does not require legacy sampling parameters.
+    if urllib.parse.urlsplit(config["model_chat_url"]).hostname != "generativelanguage.googleapis.com":
+        body["temperature"] = 0.2
+    payload = json.dumps(body).encode("utf-8")
     request = urllib.request.Request(
         config["model_chat_url"],
         data=payload,
@@ -908,7 +911,7 @@ def load_config() -> dict:
     except ValueError as exc:
         raise SystemExit(str(exc)) from exc
     model_name = (
-        (os.environ.get("GEMINI_MODEL", "").strip() or "gemini-2.5-flash")
+        (os.environ.get("GEMINI_MODEL", "").strip() or "gemini-3.8-flash")
         if use_gemini else os.environ.get("MODEL_NAME", "")
     )
     vision_model_name = os.environ.get("VISION_MODEL_NAME", "") or (
