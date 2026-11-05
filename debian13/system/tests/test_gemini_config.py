@@ -71,6 +71,7 @@ class GeminiConfigurationTests(unittest.TestCase):
             "GEMINI_API_KEY": "test-gemini-key",
             "GEMINI_MODEL": "gemini-3-flash-preview",
             "GEMINI_VISION_MODEL": "gemini-3.8-flash",
+            "VISION_MODEL_NAME": "old-openai-or-ollama-vision",
         }, clear=True):
             config = load_config()
         self.assertEqual(config["model_name"], "gemini-3-flash-preview")
