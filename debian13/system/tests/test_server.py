@@ -128,6 +128,14 @@ class Debian13ApiTests(unittest.TestCase):
         self.assertIn('event: delta\n', events)
         self.assertIn('event: done\n', events)
         self.assertIn("hello Debian 13", events)
+        frames = [frame for frame in events.split("\n\n") if frame]
+        self.assertEqual([frame.split("\n", 1)[0] for frame in frames],
+                         ["event: meta", "event: delta", "event: done"])
+        for frame in frames:
+            lines = frame.split("\n")
+            self.assertEqual(len(lines), 2)
+            self.assertTrue(lines[1].startswith("data: "))
+            self.assertIsInstance(json.loads(lines[1][6:]), dict)
         self.assertNotIn(r"\\n", events)
 
     def test_terminal_rejects_shells_unknown_commands_and_paths_outside_workspace(self):
