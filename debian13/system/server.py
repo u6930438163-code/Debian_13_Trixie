@@ -50,52 +50,14 @@ TASK_CANCEL_PATH = re.compile(r"^/api/v1/tasks/(" + TASK_UUID + r")/cancel$")
 TASK_DISPATCH_PATH = re.compile(r"^/api/v1/tasks/(" + TASK_UUID + r")/dispatch$")
 WORK_KINDS = frozenset({"development", "bugfix", "audit", "research"})
 
+# These identifiers select the owner's existing agents; they are not personas,
+# assigned departments, instructions, credentials or elevated privileges.
+# Authorization and tool restrictions are enforced by the runtime, not a prompt.
 PROFILES = {
-    "aria": {
-        "name": "Aria",
-        "role": "Integracja modeli AI i transport (root)",
-        "privileges": "root (pełne uprawnienia administratora)",
-        "access_level": "root",
-        "prompt": (
-            "You are Aria, operating with root system administrator privileges in Debian 13. "
-            "You have full root authority over AI model integration, transport protocols, and system diagnostics. "
-            "Provide authoritative, root-level technical oversight. Be clear about uncertainty when data is ambiguous."
-        ),
-    },
-    "astyria": {
-        "name": "Astyria",
-        "role": "Interfejs, dostępność i wygoda obsługi (root)",
-        "privileges": "root (pełne uprawnienia administratora)",
-        "access_level": "root",
-        "prompt": (
-            "You are Astyria, operating with root system administrator privileges in Debian 13. "
-            "You have full root authority over interface usability, ergonomics, desktop design, and accessibility policies. "
-            "Provide authoritative, root-level guidance. Be clear about uncertainty when data is ambiguous."
-        ),
-    },
-    "aurelius": {
-        "name": "Aurelius",
-        "role": "Bezpieczeństwo, prywatność i testy (root)",
-        "privileges": "root (pełne uprawnienia administratora)",
-        "access_level": "root",
-        "prompt": (
-            "You are Aurelius, operating with root system administrator privileges in Debian 13. "
-            "You have full root authority over security auditing, privacy standards, permission enforcement, and verification. "
-            "Provide authoritative, root-level analysis. Be clear about uncertainty when data is ambiguous."
-        ),
-    },
-    "alex": {
-        "name": "Alex",
-        "role": "Architektura i integracja systemu (root)",
-        "privileges": "root (pełne uprawnienia administratora)",
-        "access_level": "root",
-        "prompt": (
-            "You are Alex, operating with root system administrator privileges in Debian 13. "
-            "You are the lead architect with full root administrative authority over core system architecture, "
-            "backend infrastructure, OS design, and repository engineering. Provide authoritative, root-level oversight. "
-            "Be clear about uncertainty when data is ambiguous."
-        ),
-    },
+    "aria": {"name": "Aria"},
+    "astyria": {"name": "Astyria"},
+    "aurelius": {"name": "Aurelius"},
+    "alex": {"name": "Alex"},
 }
 
 COMMANDS = {
@@ -350,10 +312,10 @@ def complete_chat(profile: str, message: str, config: dict, image: str | None = 
     ]
     payload = json.dumps({
         "model": model,
-        "messages": [
-            {"role": "system", "content": PROFILES[profile]["prompt"]},
-            {"role": "user", "content": user_content},
-        ],
+        # No forced personality, specialty, root claims or system prompt.
+        # The actual provider handles its model's base behavior; API tools
+        # still enforce real permissions independently from chat output.
+        "messages": [{"role": "user", "content": user_content}],
         "temperature": 0.2,
     }).encode("utf-8")
     request = urllib.request.Request(
@@ -591,7 +553,7 @@ class SystemHandler(http.server.BaseHTTPRequestHandler):
         if self.path == "/v1/profiles":
             self._send_json(200, {
                 "profiles": [
-                    {"id": key, "name": value["name"], "role": value["role"], "active": False}
+                    {"id": key, "name": value["name"], "active": False}
                     for key, value in PROFILES.items()
                 ],
                 "providerConfigured": bool(
@@ -634,9 +596,9 @@ class SystemHandler(http.server.BaseHTTPRequestHandler):
             return
         if self.path == "/api/v1/agents":
             self._send_json(200, {"agents": [
-                {"id": key, "name": profile["name"], "role": profile["role"],
-                 "privileges": profile.get("privileges", "root (pełne uprawnienia administratora)"),
-                 "access_level": profile.get("access_level", "root"),
+                {"id": key, "name": profile["name"],
+                 "privileges": "not_granted_by_profile",
+                 "access_level": "runtime_enforced",
                  "status": "profile_configured", "worker": "not_running"}
                 for key, profile in PROFILES.items()
             ]})
