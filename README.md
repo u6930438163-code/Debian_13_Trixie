@@ -41,6 +41,55 @@ node --test debian13/ui/dev_server.test.mjs
 **Wymagania:** Python 3.10+; przeglądarka. Do samego startu aplikacji
 nie potrzeba Dockera, npm, płatnego planu GitHub ani klucza API.
 
+## Gemini API bez MCP — Alex, Aria, Astyria i Aurelius
+
+Debian 13 obsługuje **Google Gemini API przez kompatybilny endpoint Chat
+Completions**, bez MCP, Dockera ani pakietu `openai`. Wystarczy klucz **Gemini
+API** utworzony w [Google AI Studio](https://aistudio.google.com/apikey).
+**Klucz OpenAI API nie działa jako klucz Gemini API** — to dwie oddzielne
+usługi i dwa oddzielne zestawy uprawnień.
+
+W Codespaces dodaj `GEMINI_API_KEY` jako **Codespaces secret** powiązany z
+tym repozytorium (Settings → Secrets and variables → Codespaces), następnie
+uruchom terminal w Codespace i wykonaj:
+
+```bash
+bash debian13/start-local.sh
+```
+
+Zmienna `GEMINI_API_KEY` jest odczytywana tylko przez backend. Nie dodawaj jej
+do commitów, plików `.env` wysyłanych na GitHub, kodu przeglądarki ani czatu.
+Bez `MODEL_*` aplikacja automatycznie użyje:
+
+- URL: `https://generativelanguage.googleapis.com/v1beta/openai/chat/completions`
+- model tekstowy **i Vision**: `gemini-2.5-flash`
+- autoryzacja: `Authorization: Bearer <GEMINI_API_KEY>` (serwerowo)
+
+Opcjonalnie wybierz model w środowisku Codespaces przez `GEMINI_MODEL` i
+`GEMINI_VISION_MODEL`; sprawdź wcześniej, czy wskazany model jest dostępny
+dla Twojego klucza. Istniejące jawne ustawienia
+`MODEL_CHAT_URL` + `MODEL_API_KEY` + `MODEL_NAME` mają pierwszeństwo
+(OpenAI/Ollama/inny dostawca). Nigdy nie przekazujemy `GEMINI_API_KEY`
+do niestandardowego adresu `MODEL_CHAT_URL`.
+
+Profile `alex`, `aria`, `astyria`, `aurelius` i interfejs czatu,
+Vision, Work, diagnostyka oraz zasady uprawnień pozostają bez zmian.
+**Gemini odpowiada pod wybranym profilem**, ale to jeszcze nie jest
+udowodnione połączenie z czterema oryginalnymi, niezależnymi workerami
+użytkownika. Ich połączenie z GitHubem i wykonywanie zadań wymaga
+oddzielnie działającego procesu oraz zweryfikowanego API źródłowego.
+
+Sprawdzenie kodu bez płatnego API:
+
+```bash
+python3 -m unittest discover -s debian13/system/tests -p 'test_*.py' -v
+bash debian13/start-local.sh --check
+```
+
+Test rzeczywistej odpowiedzi Gemini wymaga aktywnego klucza, dostępnego
+modelu i połączenia internetowego Codespace. Sam ustawiony klucz ani
+zielone testy mockowane nie potwierdzają odpowiedzi z Google.
+
 ## Podłączanie modelu AI — oddzielnie od startu aplikacji
 
 Bez modelu API uczciwie zwraca `503 provider_not_configured` podczas
