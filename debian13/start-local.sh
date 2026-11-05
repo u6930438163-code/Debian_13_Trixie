@@ -11,8 +11,9 @@ Debian 13 development console — one command
   bash debian13/start-local.sh [--check | --help]
 
 Default: serve the real Python API + interactive UI on PRIVATE loopback ports.
-Connect an existing AI provider with MODEL_CHAT_URL, MODEL_API_KEY, MODEL_NAME;
-without it the UI works, while AI responses correctly report unavailable.
+Connect Gemini with GEMINI_API_KEY (optional GEMINI_MODEL/GEMINI_VISION_MODEL),
+or an OpenAI-compatible provider with MODEL_CHAT_URL, MODEL_API_KEY, MODEL_NAME.
+Without a configured provider the UI works; AI responses report unavailable.
 Default ports: 3000 for GUI, 8765 for backend (both localhost only).
 HELP
 }
@@ -42,9 +43,9 @@ try:
 except (ValueError, AssertionError):
     raise SystemExit("ERROR: Provide distinct valid ports DEBIAN13_API_PORT and DEBIAN13_UI_PORT.")
 PY
-if [[ -n "${MODEL_CHAT_URL:-}" ]]; then
-  if [[ -z "${MODEL_API_KEY:-}" || -z "${MODEL_NAME:-}" ]]; then
-    echo "ERROR: MODEL_CHAT_URL also requires MODEL_API_KEY and MODEL_NAME." >&2
+if [[ -n "${MODEL_CHAT_URL:-}" || -n "${MODEL_API_KEY:-}" || -n "${MODEL_NAME:-}" ]]; then
+  if [[ -z "${MODEL_CHAT_URL:-}" || -z "${MODEL_API_KEY:-}" || -z "${MODEL_NAME:-}" ]]; then
+    echo "ERROR: custom provider requires MODEL_CHAT_URL, MODEL_API_KEY and MODEL_NAME together." >&2
     exit 1
   fi
 fi
@@ -140,9 +141,11 @@ echo "  API: http://127.0.0.1:$API_PORT (authenticated, loopback only)"
 echo "  Work: persistent SQLite in private workspace"
 echo "  Alex: not started; original agent requires independent connected runtime"
 if [[ -n "${MODEL_CHAT_URL:-}" ]]; then
-  echo "  AI: provider configured; live inference must still be checked"
+  echo "  AI: custom provider configured; live inference must still be checked"
+elif [[ -n "${GEMINI_API_KEY:-}" ]]; then
+  echo "  AI: Gemini API configured; live inference must still be checked"
 else
-  echo "  AI: not configured; connect Ollama or another compatible provider for chat"
+  echo "  AI: not configured; set GEMINI_API_KEY or configure another provider"
 fi
 echo "  Stop with Ctrl+C. In Codespaces use the PRIVATE forwarded port $UI_PORT."
 python3 -u "$ROOT/ui/dev_server.py" &
