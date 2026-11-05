@@ -70,6 +70,8 @@ class BridgeHttpTests(unittest.TestCase):
             self.assertEqual(body["provider"], "openai")
             self.assertEqual(body["response"], "Real adapter result under test")
             caller.assert_called_once()
+            called_messages = caller.call_args.args[0]
+            self.assertEqual(called_messages, [{"role": "user", "content": "check"}])
             session_id = body["sessionId"]
             status, ended = self.post({"sessionId": session_id}, route="/api/v1/bridge/terminate")
             self.assertEqual(status, 200)
