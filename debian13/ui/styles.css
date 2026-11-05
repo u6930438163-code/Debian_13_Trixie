@@ -2261,3 +2261,64 @@ body::before {
 @media (prefers-reduced-motion: reduce) {
   .hyperspace-module { transition: none; }
 }
+
+
+/* SVL-style embedded desktop communications dock: forwards to the real chat view. */
+.hyperspace-dialog {
+  min-width: 0;
+  border: 1px solid rgba(96,165,250,.22);
+  border-radius: 16px;
+  overflow: hidden;
+  background: rgba(8,19,38,.95);
+}
+.hyperspace-dialog-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 14px 17px;
+  border-bottom: 1px solid rgba(147,197,253,.14);
+}
+.hyperspace-dialog-heading h3 { color: #f2faff; margin: 5px 0 0; font-size: 16px; }
+.hyperspace-dialog-heading > span { font: 10px ui-monospace,monospace; color: #9fb6d6; }
+.hyperspace-dialog-kicker { font: 700 10px ui-monospace,monospace; letter-spacing: .18em; color: #67e8f9; }
+.hyperspace-dialog-stage {
+  min-height: 105px;
+  padding: 18px;
+  display: flex;
+  align-items: center;
+  background: rgba(3,8,19,.58);
+}
+.hyperspace-dialog-stage p { max-width: 83ch; font: 12px/1.7 ui-monospace,monospace; color: #aabdd8; margin: 0; }
+.hyperspace-dialog-compose {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 12px 16px;
+  border-top: 1px solid rgba(147,197,253,.13);
+}
+.hyperspace-dialog-compose label { font-size: 11px; color: #a8c1da; }
+.hyperspace-dialog-compose select,
+.hyperspace-dialog-compose input {
+  min-width: 0;
+  height: 44px;
+  padding: 9px 12px;
+  border: 1px solid rgba(103,232,249,.22);
+  border-radius: 10px;
+  background: #030813;
+  color: #e4f8ff;
+}
+.hyperspace-dialog-compose input { flex: 1 1 240px; }
+.hyperspace-dialog-compose select { flex: 0 0 110px; }
+.hyperspace-dialog-compose .hyperspace-button { white-space: nowrap; }
+.hyperspace-dialog-footnote { padding: 0 16px 10px; margin: 0; color: #a9cfdf; font-size: 11px; }
+.hyperspace-dialog-footnote:empty { display: none; }
+@media (max-width:600px) {
+  .hyperspace-dialog-heading { flex-wrap:wrap; }
+  .hyperspace-dialog-compose { gap:7px; }
+  .hyperspace-dialog-compose label { width:100%; }
+  .hyperspace-dialog-compose input { flex-basis:100%; }
+  .hyperspace-dialog-compose select { flex: 1 1 auto; }
+  .hyperspace-dialog-compose .hyperspace-button { flex: 1 1 auto; }
+}
