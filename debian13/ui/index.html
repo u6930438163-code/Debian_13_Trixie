@@ -28,7 +28,7 @@
           <span class="brand-mark" aria-hidden="true">D13</span>
           <span>
             <strong>Debian 13</strong>
-            <span class="brand-subtitle">Trixie · Astyria Design · Bastilla Shan</span>
+            <span class="brand-subtitle">Trixie · Hyperspace Desktop</span>
           </span>
         </a>
         <div id="connection-status" class="runtime-pill" role="status" aria-live="polite">
@@ -50,7 +50,8 @@
           </div>
 
           <nav class="primary-nav" aria-label="Widoki">
-            <button class="nav-button is-active" type="button" data-view="chat" aria-current="page" aria-label="Czat">
+            <button class="nav-button is-active" type="button" data-view="hyperspace" aria-current="page" aria-label="Pulpit Hyperspace"><span class="nav-icon" aria-hidden="true">◈</span><span class="nav-label">Pulpit Hyperspace</span></button>
+            <button class="nav-button" type="button" data-view="chat" aria-label="Czat">
               <span class="nav-icon" aria-hidden="true">◉</span><span class="nav-label">Czat</span>
             </button>
             <button class="nav-button" type="button" data-view="work" aria-label="Work">
@@ -97,12 +98,13 @@
         <main class="main-content">
           <section class="view-intro" aria-labelledby="page-title">
             <div>
-              <p class="eyebrow">NIEZALEŻNE ŚRODOWISKO DEBIAN 13</p>
-              <h1 id="page-title">W czym mogę pomóc?</h1>
+              <p class="eyebrow">DEBIAN 13 TRIXIE · HYPERSPACE DESKTOP</p>
+              <h1 id="page-title">Enter the Hyperspace</h1>
               <p>Przestrzeń AI i Debian 13: prawdziwe API, zadania Work, interaktywny terminal. Bez symulowanych agentów.</p>
             </div>
             <div class="view-switch" role="group" aria-label="Widok pracy">
-              <button class="view-switch-button is-active" type="button" data-view="chat" aria-pressed="true">Czat</button>
+              <button class="view-switch-button is-active" type="button" data-view="hyperspace" aria-pressed="true">Pulpit</button>
+              <button class="view-switch-button" type="button" data-view="chat" aria-pressed="false">Czat</button>
               <button class="view-switch-button" type="button" data-view="work" aria-pressed="false">Work</button>
               <button class="view-switch-button" type="button" data-view="diagnostics" aria-pressed="false">Diagnostyka</button>
               <button class="view-switch-button" type="button" data-view="terminal" aria-pressed="false">Terminal</button>
@@ -110,7 +112,48 @@
             </div>
           </section>
 
-          <section id="chat-view" class="workspace-view chat-view" aria-label="Czat">
+          <!-- Source design: SVL_System/src/components/BastillaDashboard.tsx -->
+          <section id="hyperspace-view" class="workspace-view hyperspace-view" aria-labelledby="hyperspace-title">
+            <header class="hyperspace-statusbar">
+              <div class="hyperspace-logo" aria-hidden="true">◈</div>
+              <div class="hyperspace-brand"><strong>DEBIAN 13 <span>TRIXIE</span></strong><small>HYPERSPACE DESKTOP · INSPIROWANY SVL_SYSTEM</small></div>
+              <div class="hyperspace-runtime" role="status" aria-live="polite">
+                <span id="hyperspace-api-state">API: sprawdzanie…</span>
+                <span id="hyperspace-model-state">Model: niezweryfikowany</span>
+              </div>
+            </header>
+            <div class="hyperspace-hero-grid">
+              <section class="hyperspace-hero">
+                <div class="hyperspace-kicker"><span aria-hidden="true" class="hyperspace-orbit"></span> PRZESTRZEŃ SYSTEMOWA · RZECZYWISTE API</div>
+                <h2 id="hyperspace-title">Enter the <span>Hyperspace</span></h2>
+                <p>Jedno centrum sterowania Debian 13: rozmowy z agentami Aria, Alex, Astyria i Aurelius, interaktywny terminal, Work, diagnostyka i integracje. Stan działania ustala API — obecność kafelka nie oznacza uruchomionego workera.</p>
+                <div class="hyperspace-hero-actions">
+                  <button class="hyperspace-button is-primary" type="button" data-view="chat">◉ Otwórz czat AI</button>
+                  <button class="hyperspace-button" type="button" data-view="terminal">›_ Konsola CLI</button>
+                </div>
+              </section>
+              <section class="hyperspace-console" aria-label="Skrót do funkcji systemowych">
+                <div class="hyperspace-console-title"><span>◈</span> PULPIT OPERACYJNY</div>
+                <p>Widoki połączone z rzeczywistym backendem Debian 13.</p>
+                <div class="hyperspace-mini">
+                  <div><span>API systemowe</span><strong id="hyperspace-runtime-indicator">Oczekiwanie na pomiar</strong></div>
+                  <div><span>Agenci</span><strong>4 profile · workery do weryfikacji</strong></div>
+                  <div><span>Synchronizacja</span><strong>GitHub → po zatwierdzeniu PR</strong></div>
+                </div>
+              </section>
+            </div>
+            <div class="hyperspace-module-heading"><div><small>OBSZAR ROBOCZY</small><h3>Moduły systemu</h3></div><span>Wybierz widok</span></div>
+            <div class="hyperspace-modules">
+              <button type="button" data-view="chat" class="hyperspace-module"><span class="hyperspace-module-icon">◉</span><strong>Dialog agentów</strong><small>Czat i kanały oryginalnych agentów</small></button>
+              <button type="button" data-view="terminal" class="hyperspace-module"><span class="hyperspace-module-icon">›_</span><strong>Konsola CLI</strong><small>Interaktywny terminal i skrypty</small></button>
+              <button type="button" data-view="work" class="hyperspace-module"><span class="hyperspace-module-icon">▤</span><strong>Centrum zadań</strong><small>Work i kolejka SQLite</small></button>
+              <button type="button" data-view="diagnostics" class="hyperspace-module"><span class="hyperspace-module-icon">✚</span><strong>Telemetria</strong><small>Stan API, CPU, RAM i agentów</small></button>
+              <button type="button" data-view="settings" class="hyperspace-module"><span class="hyperspace-module-icon">⚙</span><strong>Integracje</strong><small>MCP, Ollama, Codex i konfiguracja</small></button>
+            </div>
+            <p class="hyperspace-footer-note">Hyperspace Desktop to interfejs aplikacji, nie dowód uruchomienia pełnego systemu operacyjnego ani autonomicznych agentów.</p>
+          </section>
+
+          <section id="chat-view" class="workspace-view chat-view" aria-label="Czat" hidden>
             <div class="chat-workspace-heading">
               <div><span class="eyebrow">TWOJE CENTRUM DOWODZENIA</span><h2>Rozmowy z agentami AI</h2>
                 <p id="agent-channel-feedback" class="chat-workspace-subtitle">Wybierz oryginalnego agenta. Połączenie jest weryfikowane przez API.</p>
@@ -325,9 +368,14 @@
                 </div>
                 <span class="local-badge">Ustawienia lokalne</span>
               </div>
-              <p class="work-limit-note">Wybierz wygląd działającego GUI: nowy Bastilla Shan, kolory przeniesione z Debian 13 Original lub wariant Astyria Cosmic. Wygląd zapisuje się tylko w tej przeglądarce; nie zmienia konfiguracji serwera ani innych urządzeń.</p>
+              <p class="work-limit-note">Domyślny wygląd jest inspirowany pulpitem „Enter the Hyperspace” z SVL_System. Możesz też wybrać inne motywy bez zmiany pracy API. Wygląd zapisuje się tylko w tej przeglądarce; nie zmienia konfiguracji serwera ani innych urządzeń.</p>
               <div class="design-theme-grid" role="group" aria-label="Wybór motywu">
-                <button type="button" class="design-theme-option" data-design-theme="bastilla-shan" aria-pressed="true">
+                <button type="button" class="design-theme-option" data-design-theme="hyperspace" aria-pressed="true">
+                  <span class="design-theme-preview theme-hyperspace" aria-hidden="true"><i></i><i></i><i></i></span>
+                  <strong>Hyperspace Desktop</strong>
+                  <small>Wybrany pulpit SVL</small>
+                </button>
+                <button type="button" class="design-theme-option" data-design-theme="bastilla-shan" aria-pressed="false">
                   <span class="design-theme-preview theme-bastilla" aria-hidden="true"><i></i><i></i><i></i></span>
                   <strong>Bastilla Shan</strong>
                   <small>Fioletowy · kosmiczny</small>
@@ -343,7 +391,7 @@
                   <small>Niebieski · techniczny</small>
                 </button>
               </div>
-              <p id="design-feedback" role="status" aria-live="polite" class="form-feedback">Motyw domyślny: Bastilla Shan.</p>
+              <p id="design-feedback" role="status" aria-live="polite" class="form-feedback">Motyw domyślny: Hyperspace Desktop.</p>
             </section>
             <div class="wallpaper-settings">
               <h3>Motyw Modern OS · tapeta Bastilla</h3>
