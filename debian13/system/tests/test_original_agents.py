@@ -27,6 +27,7 @@ class OriginalAgentsTests(unittest.TestCase):
         self.assertFalse(data["registryReachable"])
         self.assertFalse(data["originalAgentExecutionVerified"])
         self.assertEqual(len(data["agents"]), 4)
+        self.assertTrue(all("role" not in agent for agent in data["agents"]))
         self.assertTrue(all(not agent["connected"] and not agent["workerVerified"]
                             for agent in data["agents"]))
 
