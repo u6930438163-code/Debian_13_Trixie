@@ -81,7 +81,11 @@ class UiHandler(SimpleHTTPRequestHandler):
         self.wfile.write(body)
 
     def _proxy_api(self) -> None:
-        path = urlsplit(self.path).path
+        parsed_url = urlsplit(self.path)
+        path = parsed_url.path
+        if parsed_url.query or parsed_url.fragment:
+            self._send_error_json(400, "Parametry URL API nie są obsługiwane.")
+            return
         if (self.command, path) not in API_PATHS and not (
             self.command == "GET" and (API_SESSION_PATH.fullmatch(path) or API_TASK_PATH.fullmatch(path))
         ) and not (
