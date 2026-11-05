@@ -262,3 +262,12 @@ test('original Alex capability and explicit operator handoff stay behind tokeniz
   assert.equal(blocked.status, 400);
   assert.equal(upstream.requests.length, 2, 'invalid dispatch must not reach API');
 });
+
+test('proxy rejects API query parameters instead of silently dropping them', async (t) => {
+  const upstream = await startUpstreamDouble(t);
+  const base = await startUiProxy(t, upstream.port);
+  const response = await fetch(`${base}/api/v1/status?unexpected=1`);
+  assert.equal(response.status, 400);
+  assert.deepEqual(await response.json(), { error: 'Parametry URL API nie są obsługiwane.' });
+  assert.equal(upstream.requests.length, 0, 'query-bearing requests must not reach upstream');
+});
