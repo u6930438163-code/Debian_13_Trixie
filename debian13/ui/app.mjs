@@ -17,6 +17,12 @@ export class ApiError extends Error {
   }
 }
 
+// Return null for chat messages; only an explicit /cli command reaches the terminal.
+export function parseCliCommand(text) {
+  if (typeof text !== 'string' || !/^\/cli(?:\s|$)/i.test(text)) return null;
+  return text.replace(/^\/cli\s*/i, '').trim();
+}
+
 function apiErrorMessage(payload, status) {
   if (status === 401) return 'Brak autoryzacji API (401). Sprawdź token operatora i bezpieczny adres panelu.';
   if (status === 403) return 'API odrzuciło uprawnienia (403). Sprawdź dostęp operatora.';
@@ -1144,12 +1150,13 @@ function bindChatForm() {
     }
     // Explicit CLI handoff: chat never silently executes model-generated shell commands.
     // The existing authenticated terminal API remains the sole execution path.
-    if (/^\\/cli(?:\\s|$)/i.test(text)) {
+    const cliCommand = parseCliCommand(text);
+    if (cliCommand !== null) {
       if (attachment?.files?.length) {
         feedback.textContent = 'Polecenie /cli nie obsługuje załączników. Usuń obraz i spróbuj ponownie.';
         return;
       }
-      const command = text.replace(/^\\/cli\\s*/i, '').trim();
+      const command = cliCommand;
       if (!command) {
         feedback.textContent = 'Użycie: /cli pwd lub /cli ls. Dostępne są tylko polecenia dozwolone przez serwer.';
         return;
@@ -1615,3 +1622,4 @@ if (typeof document !== 'undefined') {
   }
   if (SESSION_ID_PATTERN.test(savedSession)) void loadHistory(savedSession);
 }
+

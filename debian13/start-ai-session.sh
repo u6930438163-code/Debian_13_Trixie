@@ -35,10 +35,11 @@ if [[ -n "${MODEL_CHAT_URL:-}" ]]; then
   echo "Text and images may be sent to the selected external model provider."
   docker compose -f compose.yaml up -d --build
 else
-  export OLLAMA_MODEL="${OLLAMA_MODEL:-llama3.2-vision:11b}"
-  export OLLAMA_VISION_MODEL="${OLLAMA_VISION_MODEL:-llama3.2-vision:11b}"
+  # A small local coding model fits modest CPU-only Codespaces better than 11B Vision.
+  export OLLAMA_MODEL="${OLLAMA_MODEL:-qwen2.5-coder:1.5b}"
+  export OLLAMA_VISION_MODEL="${OLLAMA_VISION_MODEL:-}"
   RAM_KIB="$(awk '/MemTotal:/ {print $2}' /proc/meminfo)"
-  if [[ "$RAM_KIB" -lt 16777216 ]]; then
+  if [[ "$OLLAMA_MODEL" == "llama3.2-vision:11b" && "$RAM_KIB" -lt 16777216 ]]; then
     echo "WARNING: less than 16 GiB RAM detected. Llama Vision 11B may fail or run slowly." >&2
     echo "Choose a larger Codespace/host or set MODEL_CHAT_URL, MODEL_API_KEY and MODEL_NAME." >&2
   fi
@@ -52,3 +53,4 @@ echo "API: localhost:$DEBIAN13_API_PORT; GUI: localhost:$DEBIAN13_UI_PORT."
 echo "Open the Codespaces Ports tab and choose the PRIVATE forwarded port 3000."
 echo "Replies use the configured model; chat sessions are not persisted."
 exec python3 "$BASE/ui/dev_server.py"
+

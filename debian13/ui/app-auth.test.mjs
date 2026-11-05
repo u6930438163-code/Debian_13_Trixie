@@ -1,6 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createApiClient, ApiError } from './app.mjs';
+import { createApiClient, ApiError, parseCliCommand } from './app.mjs';
+
+test('only an explicit /cli command is routed to the terminal', () => {
+  assert.equal(parseCliCommand('/cli pwd'), 'pwd');
+  assert.equal(parseCliCommand('/CLI   ls'), 'ls');
+  assert.equal(parseCliCommand('/cli'), '');
+  assert.equal(parseCliCommand('/cli\nwhoami'), 'whoami');
+  assert.equal(parseCliCommand('/climate today'), null);
+  assert.equal(parseCliCommand('run /cli pwd'), null);
+});
 
 const token = 'correct-operator-token-32-characters-minimum';
 const reply = (status, payload) => ({ status, ok: status >= 200 && status < 300,
@@ -52,3 +61,4 @@ test('UI bridge sends both provider choice and session termination to the authen
     { url: '/api/v1/bridge/terminate', method: 'POST', body: { sessionId: 'test-session' } },
   ]);
 });
+
