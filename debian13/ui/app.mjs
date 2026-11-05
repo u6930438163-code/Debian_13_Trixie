@@ -953,6 +953,8 @@ function recordHistory(sessionId, title) {
 }
 
 function showView(view) {
+  // Expose the active view to layout CSS: only chat uses the immersive viewport.
+  document.documentElement.dataset.activeView = view;
   const ids = { hyperspace: 'hyperspace-view', chat: 'chat-view', work: 'work-view', diagnostics: 'diagnostics-view', terminal: 'terminal-view', settings: 'settings-view' };
   for (const [name, id] of Object.entries(ids)) {
     const section = document.getElementById(id);
@@ -1628,7 +1630,22 @@ function bindBridgeForm() {
   });
 }
 
+// Keep the composer visible as Android's keyboard changes the visual viewport.
+function bindChatViewport() {
+  const viewport = window.visualViewport;
+  if (!viewport) return;
+  const syncHeight = () => {
+    const height = Math.round(viewport.height);
+    if (height > 0) {
+      document.documentElement.style.setProperty('--chat-viewport-height', height + 'px');
+    }
+  };
+  viewport.addEventListener('resize', syncHeight);
+  syncHeight();
+}
+
 if (typeof document !== 'undefined') {
+  bindChatViewport();
   renderAgentProfiles(document.getElementById('agent-list'));
   bindNavigation();
   bindChatForm();
