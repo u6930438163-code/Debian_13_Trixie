@@ -78,6 +78,14 @@ class Debian13ApiTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual([profile["id"] for profile in data["profiles"]], ["aria", "astyria", "aurelius", "alex"])
         self.assertTrue(all(profile["active"] is False for profile in data["profiles"]))
+        self.assertTrue(all("role" not in profile and "prompt" not in profile
+                            and "privileges" not in profile for profile in data["profiles"]))
+        status, agents = self.request_json("GET", "/api/v1/agents")
+        self.assertEqual(status, 200)
+        self.assertTrue(all(agent["access_level"] == "runtime_enforced"
+                            and agent["privileges"] == "not_granted_by_profile"
+                            and "role" not in agent
+                            for agent in agents["agents"]))
 
     def test_diagnostics_are_authenticated_and_do_not_disclose_secrets(self):
         self.assertEqual(self.request_json("GET", "/v1/diagnostics", token=None)[0], 401)
@@ -147,7 +155,10 @@ class Debian13ApiTests(unittest.TestCase):
             self.assertEqual(data["content"], "Real test-provider response.")
             self.assertEqual(data["profile"], "aurelius")
             self.assertEqual(provider.authorization, "Bearer " + self.server.config["model_api_key"])
-            self.assertIn("security", provider.body["messages"][0]["content"].lower())
+            self.assertEqual(provider.body["messages"], [
+                {"role": "user", "content": "Review this test."},
+            ])
+            self.assertNotIn("system", [m["role"] for m in provider.body["messages"]])
         finally:
             provider.shutdown()
             provider.server_close()
