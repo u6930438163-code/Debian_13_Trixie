@@ -162,6 +162,21 @@ class Debian13ApiTests(unittest.TestCase):
         self.assertEqual(status, 503)
         self.assertEqual(data["error"]["code"], "provider_not_configured")
 
+    def test_mobile_gui_chat_stream_requires_authentication(self):
+        for token in (None, "invalid-token"):
+            headers = {"Content-Type": "application/json"}
+            if token is not None:
+                headers["Authorization"] = "Bearer " + token
+            self.connection.request(
+                "POST", "/api/v1/chat/stream",
+                body=json.dumps({"agent": "alex", "message": "Write tests"}),
+                headers=headers,
+            )
+            response = self.connection.getresponse()
+            payload = json.loads(response.read())
+            self.assertEqual(response.status, 401)
+            self.assertEqual(payload["error"]["code"], "unauthorized")
+
     def test_mobile_gui_chat_stream_fails_closed_without_provider(self):
         self.connection.request(
             "POST", "/api/v1/chat/stream",
