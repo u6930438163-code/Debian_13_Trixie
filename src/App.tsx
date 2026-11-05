@@ -7,9 +7,7 @@ import React, { useState, useEffect, useRef } from 'react';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'chat' | 'work' | 'terminal' | 'settings' | 'astyria' | 'fourAgents'>('chat');
-  const [messages, setMessages] = useState<Array<{ role: 'user' | 'assistant'; text: string; agent: string; feedback?: string }>>([
-    { role: 'assistant', text: 'Witaj w konsoli Debian 13 Trixie. Jestem Astyria, architektem GUI i designu systemowego. Wdrożono motyw Bastilla Shan, akwizycję kosmiczną oraz kanwę ChatGPT Work.', agent: 'Astyria' }
-  ]);
+  const [messages, setMessages] = useState<Array<{ role: 'user' | 'assistant'; text: string; agent: string; feedback?: string }>>([]);
   const [inputMsg, setInputMsg] = useState('');
   const [selectedAgent, setSelectedAgent] = useState('astyria');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -38,27 +36,23 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ profile: selectedAgent, message: userText })
       });
+      if (!res.ok) throw new Error('Brak potwierdzonej odpowiedzi z API.');
       const data = await res.json();
-      setMessages(prev => [...prev, { role: 'assistant', text: data.content || 'Odpowiedź wygenerowana przez system.', agent: selectedAgent }]);
+      if (typeof data.content !== 'string' || !data.content.trim()) throw new Error('API nie zwróciło odpowiedzi modelu.');
+      setMessages(prev => [...prev, { role: 'assistant', text: data.content, agent: selectedAgent }]);
     } catch {
-      setMessages(prev => [...prev, { role: 'assistant', text: `[Tryb lokalny Astyria] Otrzymano wiadomość: "${userText}". System działa poprawnie.`, agent: selectedAgent }]);
+      setMessages(prev => [...prev, { role: 'assistant', text: 'Błąd połączenia z rzeczywistym modelem AI. Nie wygenerowano zastępczej odpowiedzi.', agent: 'System' }]);
     }
   };
 
-  const startDebate = async () => {
-    setIsDebating(true);
-    setDebateLog([{ name: 'Moderator', color: '#94a3b8', text: `Rozpoczęcie dwukierunkowej debaty czterech agentów na temat: "${debateTopic}"` }]);
-    const agents = [
-      { name: 'Aria (Modele AI)', color: '#38bdf8', text: 'Analizuję transport modeli oraz przepustowość inferencji.' },
-      { name: 'Astyria (GUI & Design)', color: '#fbbf24', text: 'Wdrożono motyw Bastilla Shan, responsywność oraz kanwę Work w stylu ChatGPT.' },
-      { name: 'Aurelius (Bezpieczeństwo)', color: '#34d399', text: 'Zabezpieczono tokeny operatora oraz zablokowano akwizycję Ziemi.' },
-      { name: 'Alex (Architektura)', color: '#a78bfa', text: 'Protokół MCP oraz OpenAPI dla GPT Actions działają poprawnie.' },
-    ];
-    for (const ag of agents) {
-      await new Promise(r => setTimeout(r, 700));
-      setDebateLog(prev => [...prev, ag]);
-    }
-    setDebateLog(prev => [...prev, { name: 'Moderator', color: '#94a3b8', text: 'Debata dobiegła końca. Wnioski zapisane w rejestrze systemowym.' }]);
+  const startDebate = () => {
+    // This legacy demo has no authenticated multi-agent gateway.
+    // Do not invent a discussion, worker status or completed actions.
+    setDebateLog([{
+      name: 'System',
+      color: '#94a3b8',
+      text: 'Czat grupowy nie jest połączony z czterema uruchomionymi agentami. Debata nie została wykonana; konieczny jest rzeczywisty worker i brama komunikacji.',
+    }]);
     setIsDebating(false);
   };
 
@@ -81,7 +75,7 @@ export default function App() {
         </div>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
           <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#34d399', display: 'inline-block' }}></span>
-          <span style={{ fontSize: '12px', color: '#94a3b8' }}>API Połączone · Root</span>
+          <span style={{ fontSize: '12px', color: '#94a3b8' }}>Status modelu i uprawnienia do weryfikacji</span>
         </div>
       </header>
 
@@ -118,10 +112,10 @@ export default function App() {
             <div style={{ marginTop: 'auto', padding: '12px', background: '#050811', borderRadius: '8px', border: '1px solid #1e293b', fontSize: '11px', color: '#94a3b8' }}>
               <strong>Profil Aktywny:</strong>
               <select value={selectedAgent} onChange={(e) => setSelectedAgent(e.target.value)} style={{ width: '100%', marginTop: '6px', padding: '4px', background: '#0b1322', color: '#fff', border: '1px solid #1e293b', borderRadius: '4px' }}>
-                <option value="astyria">Astyria [Design]</option>
-                <option value="aria">Aria [Modele]</option>
-                <option value="aurelius">Aurelius [Bezpieczeństwo]</option>
-                <option value="alex">Alex [Architektura]</option>
+                <option value="astyria">Astyria</option>
+                <option value="aria">Aria</option>
+                <option value="aurelius">Aurelius</option>
+                <option value="alex">Alex</option>
               </select>
             </div>
           )}
@@ -134,7 +128,7 @@ export default function App() {
             <div style={{ display: 'flex', flexDirection: 'column', height: '100%', padding: '20px' }}>
               <div style={{ marginBottom: '12px' }}>
                 <h2 style={{ margin: '0 0 4px 0', fontSize: '18px' }}>Duży Czat AI (Styl ChatGPT)</h2>
-                <p style={{ margin: 0, fontSize: '12px', color: '#94a3b8' }}>Dwukierunkowa interakcja z profilami root oraz natychmiastową oceną odpowiedzi.</p>
+                <p style={{ margin: 0, fontSize: '12px', color: '#94a3b8' }}>Rozmowa wymaga rzeczywistego połączenia z wybranym agentem. Profil nie nadaje uprawnień root.</p>
               </div>
               <div ref={transcriptRef} style={{ flex: 1, overflowY: 'auto', padding: '16px', background: '#0b1322', border: '1px solid #1e293b', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
                 {messages.map((m, idx) => (
@@ -203,16 +197,16 @@ export default function App() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                 <div>
                   <h2 style={{ margin: '0 0 4px 0', fontSize: '18px' }}>Dwukierunkowa Debata 4 Agentów</h2>
-                  <p style={{ margin: 0, fontSize: '12px', color: '#94a3b8' }}>Aria, Astyria, Aurelius i Alex dyskutują nad architekturą systemu.</p>
+                  <p style={{ margin: 0, fontSize: '12px', color: '#94a3b8' }}>Swobodna dyskusja wymaga działającej bramy czterech agentów.</p>
                 </div>
-                <button onClick={startDebate} disabled={isDebating} style={{ padding: '8px 16px', background: '#fbbf24', color: '#050811', border: 'none', borderRadius: '8px', fontWeight: 600, cursor: 'pointer' }}>{isDebating ? 'Trwa debata...' : 'Rozpocznij Debatę'}</button>
+                <button onClick={startDebate} disabled={isDebating} style={{ padding: '8px 16px', background: '#fbbf24', color: '#050811', border: 'none', borderRadius: '8px', fontWeight: 600, cursor: 'pointer' }}>{isDebating ? 'Sprawdzanie...' : 'Sprawdź gotowość'}</button>
               </div>
               <div style={{ marginBottom: '16px' }}>
                 <label style={{ fontSize: '12px', display: 'block', marginBottom: '4px' }}>Temat debaty:</label>
                 <input value={debateTopic} onChange={e => setDebateTopic(e.target.value)} style={{ width: '100%', padding: '8px', background: '#0b1322', color: '#fff', border: '1px solid #1e293b', borderRadius: '6px' }} />
               </div>
               <div style={{ flex: 1, background: '#0b1322', border: '1px solid #1e293b', borderRadius: '12px', padding: '16px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                {debateLog.length === 0 && <p style={{ color: '#94a3b8', fontSize: '13px' }}>Kliknij „Rozpocznij Debatę”, aby uruchomić okrągły stół agentów.</p>}
+                {debateLog.length === 0 && <p style={{ color: '#94a3b8', fontSize: '13px' }}>Sprawdź, czy dostępna jest rzeczywista brama czterech agentów.</p>}
                 {debateLog.map((l, i) => (
                   <div key={i} style={{ padding: '10px 14px', borderLeft: `3px solid ${l.color}`, background: 'rgba(255,255,255,0.02)', borderRadius: '6px' }}>
                     <strong style={{ color: l.color }}>{l.name}</strong>: <span style={{ color: '#e2e8f0' }}>{l.text}</span>
