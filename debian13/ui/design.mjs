@@ -1,5 +1,6 @@
 /* Live Trixie GUI design preferences; never touches provider or agent state. */
 export const DESIGN_THEMES = Object.freeze([
+  'hyperspace',
   'bastilla-shan',
   'original-mint',
   'astyria-cosmic',
@@ -8,13 +9,14 @@ const THEME_KEY = 'debian13-design-theme-v1';
 const FOCUS_KEY = 'debian13-chat-focus-v1';
 
 const LABELS = Object.freeze({
+  'hyperspace': 'Hyperspace Desktop',
   'bastilla-shan': 'Bastilla Shan',
   'original-mint': 'Debian Original',
   'astyria-cosmic': 'Astyria Cosmic',
 });
 
 export function normalizeDesignTheme(value) {
-  return DESIGN_THEMES.includes(value) ? value : 'bastilla-shan';
+  return DESIGN_THEMES.includes(value) ? value : 'hyperspace';
 }
 
 export function parseFocusPreference(value) {
