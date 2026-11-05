@@ -1,8 +1,8 @@
 export const AGENT_PROFILES = Object.freeze([
-  { id: 'aria', name: 'Aria', role: 'Modele i transport AI (root)', privileges: 'root (pełne uprawnienia administratora)' },
-  { id: 'astyria', name: 'Astyria', role: 'Interfejs i ergonomia (root)', privileges: 'root (pełne uprawnienia administratora)' },
-  { id: 'aurelius', name: 'Aurelius', role: 'Bezpieczeństwo i testy (root)', privileges: 'root (pełne uprawnienia administratora)' },
-  { id: 'alex', name: 'Alex', role: 'Architektura i integracja (root)', privileges: 'root (pełne uprawnienia administratora)' },
+  { id: 'aria', name: 'Aria' },
+  { id: 'astyria', name: 'Astyria' },
+  { id: 'aurelius', name: 'Aurelius' },
+  { id: 'alex', name: 'Alex' },
 ]);
 
 const SESSION_KEY = 'debian13-chat-session';
@@ -258,12 +258,9 @@ function renderAgentProfiles(list, agents = getInitialAgentStatuses()) {
     name.textContent = agent.name;
     nameRow.append(dot, name);
 
-    const role = document.createElement('p');
-    role.className = 'agent-role';
-    role.textContent = agent.role;
     const privilege = document.createElement('p');
     privilege.className = 'agent-privilege';
-    privilege.textContent = agent.privileges ?? 'root (pełne uprawnienia administratora)';
+    privilege.textContent = 'Brak narzuconej specjalizacji · uprawnienia ustala środowisko';
     const labels = agentStatusLabel(agent);
     const profile = document.createElement('p');
     profile.className = 'agent-state';
@@ -272,7 +269,7 @@ function renderAgentProfiles(list, agents = getInitialAgentStatuses()) {
     worker.className = 'worker-state';
     worker.textContent = labels.worker;
 
-    item.append(nameRow, role, privilege, profile, worker);
+    item.append(nameRow, privilege, profile, worker);
     fragment.append(item);
   }
   list.replaceChildren(fragment);
@@ -622,9 +619,6 @@ async function loadOriginalAgents() {
       item.className = 'agent-card';
       const heading = document.createElement('strong');
       heading.textContent = agent.name;
-      const role = document.createElement('p');
-      role.className = 'agent-role';
-      role.textContent = agent.role;
       const status = document.createElement('p');
       status.className = 'agent-state';
       status.textContent = agent.workerVerified === true
@@ -635,7 +629,7 @@ async function loadOriginalAgents() {
       const details = document.createElement('p');
       details.className = 'worker-state';
       details.textContent = `Zadania w rejestrze: ${Number(agent.tasksInRegistry) || 0}; uruchomione workery: niepotwierdzone`;
-      item.append(heading, role, status, details);
+      item.append(heading, status, details);
       fragment.append(item);
     }
     list.replaceChildren(fragment);
