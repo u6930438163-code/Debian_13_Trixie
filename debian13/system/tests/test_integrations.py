@@ -63,7 +63,9 @@ class IntegrationTests(unittest.TestCase):
         self.assertEqual({tool["name"] for tool in listed["result"]["tools"]},
                          {"debian13_profiles", "debian13_diagnostics", "debian13_integrations",
                           "alex_existing_status", "alex_existing_tasks", "debian13_work_tasks",
-                          "debian13_original_agents", "debian13_queue_work_task"})
+                          "debian13_original_agents", "debian13_queue_work_task",
+                          "debian13_work_task_detail", "debian13_cancel_work_task",
+                          "debian13_chat_agent"})
         with patch.dict(os.environ, {
             "DEBIAN13_SYSTEM_API_URL": f"http://127.0.0.1:{self.api.server_port}",
             "DEBIAN13_API_TOKEN": TOKEN,
@@ -197,6 +199,92 @@ class IntegrationTests(unittest.TestCase):
         self.assertEqual(receipt["task"]["status"], "queued")
         self.assertEqual(len(self.api.work_store.list_tasks()), 1)
         self.assertNotIn(TOKEN, json.dumps(response))
+
+    def test_mcp_task_detail_and_cancel_through_authenticated_stdio(self):
+        task = self.api.work_store.create_task(
+            "development", "aria", "Review CSS", "Review UI without executing")
+        with patch.dict(os.environ, {
+            "DEBIAN13_SYSTEM_API_URL": f"http://127.0.0.1:{self.api.server_port}",
+            "DEBIAN13_API_TOKEN": TOKEN,
+        }):
+            detail = mcp_server.response({
+                "jsonrpc": "2.0", "id": 30, "method": "tools/call",
+                "params": {"name": "debian13_work_task_detail",
+                           "arguments": {"task_id": task["id"]}},
+            })
+            invalid = mcp_server.response({
+                "jsonrpc": "2.0", "id": 31, "method": "tools/call",
+                "params": {"name": "debian13_cancel_work_task",
+                           "arguments": {"task_id": "../../../etc/passwd"}},
+            })
+            canceled = mcp_server.response({
+                "jsonrpc": "2.0", "id": 32, "method": "tools/call",
+                "params": {"name": "debian13_cancel_work_task",
+                           "arguments": {"task_id": task["id"]}},
+            })
+        self.assertFalse(detail["result"]["isError"])
+        self.assertEqual(json.loads(detail["result"]["content"][0]["text"])["task"]["id"], task["id"])
+        self.assertEqual(invalid["error"]["code"], -32602)
+        self.assertFalse(canceled["result"]["isError"])
+        receipt = json.loads(canceled["result"]["content"][0]["text"])
+        self.assertEqual(receipt["task"]["status"], "cancelled")
+        self.assertFalse(receipt["executionStarted"])
+        self.assertEqual(self.api.work_store.get_task(task["id"])["status"], "cancelled")
+
+    def test_mcp_http_chat_requires_bearer_and_real_model_reply(self):
+        headers = {"Content-Type": "application/json",
+                   "Accept": "application/json, text/event-stream",
+                   "Authorization": "Bearer " + TOKEN}
+        request = {"jsonrpc": "2.0", "id": 21, "method": "tools/call",
+                   "params": {"name": "debian13_chat_agent",
+                              "arguments": {"agent": "alex", "message": "Status?"}}}
+
+        def call(body=request, authorized=True):
+            conn = http.client.HTTPConnection(*self.api.server_address, timeout=5)
+            try:
+                h = headers if authorized else {k: v for k, v in headers.items()
+                                                if k != "Authorization"}
+                conn.request("POST", "/mcp", body=json.dumps(body), headers=h)
+                response = conn.getresponse()
+                return response.status, json.loads(response.read())
+            finally:
+                conn.close()
+
+        self.assertEqual(call(authorized=False)[0], 401)
+        bad = {"jsonrpc": "2.0", "id": 22, "method": "tools/call",
+               "params": {"name": "debian13_chat_agent",
+                          "arguments": {"agent": "alex", "message": "x", "command": "id"}}}
+        self.assertEqual(call(body=bad)[1]["error"]["code"], -32602)
+        with patch("server.complete_chat", return_value=("Real adapter reply", "fixture-model")) as adapter:
+            status, result = call()
+        self.assertEqual(status, 200)
+        self.assertFalse(result["result"]["isError"])
+        reply = json.loads(result["result"]["content"][0]["text"])
+        self.assertEqual(reply["reply"], "Real adapter reply")
+        self.assertEqual(reply["agent"], "alex")
+        self.assertEqual(reply["model"], "fixture-model")
+        self.assertFalse(reply["originalAgentExecutionVerified"])
+        self.assertFalse(reply["sessionPersisted"])
+        adapter.assert_called_once_with("alex", "Status?", self.api.config)
+        self.assertNotIn(TOKEN, json.dumps(result))
+
+    def test_mcp_http_chat_fails_closed_without_provider(self):
+        query = {"jsonrpc": "2.0", "id": 25, "method": "tools/call",
+                 "params": {"name": "debian13_chat_agent",
+                            "arguments": {"agent": "aria", "message": "Hello"}}}
+        headers = {"Content-Type": "application/json",
+                   "Accept": "application/json, text/event-stream",
+                   "Authorization": "Bearer " + TOKEN}
+        conn = http.client.HTTPConnection(*self.api.server_address, timeout=5)
+        try:
+            conn.request("POST", "/mcp", body=json.dumps(query), headers=headers)
+            response = conn.getresponse()
+            self.assertEqual(response.status, 200)
+            reply = json.loads(response.read())
+            self.assertTrue(reply["result"]["isError"])
+            self.assertNotIn("Hello, I am Aria", json.dumps(reply))
+        finally:
+            conn.close()
 
     def test_mcp_rejects_unknown_and_mutating_tools(self):
         result = mcp_server.response({
