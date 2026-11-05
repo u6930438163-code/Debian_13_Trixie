@@ -17,6 +17,12 @@ export class ApiError extends Error {
   }
 }
 
+// Return null for chat messages; only an explicit /cli command reaches the terminal.
+export function parseCliCommand(text) {
+  if (typeof text !== 'string' || !/^\/cli(?:\s|$)/i.test(text)) return null;
+  return text.replace(/^\/cli\s*/i, '').trim();
+}
+
 function apiErrorMessage(payload, status) {
   if (status === 401) return 'Brak autoryzacji API (401). Sprawdź token operatora i bezpieczny adres panelu.';
   if (status === 403) return 'API odrzuciło uprawnienia (403). Sprawdź dostęp operatora.';
@@ -301,6 +307,22 @@ function modelStatusLabel(model) {
   return `${label} · ${inference}`;
 }
 
+// Distinguish a checked service from an unverified or unconfigured one.
+// Reachable API does not establish that the selected model is installed or can infer.
+export function ollamaStatusLabel(ollama) {
+  if (!ollama || typeof ollama !== 'object') return 'Stan Ollamy niezweryfikowany';
+  if (ollama.state === 'not_selected') return 'Ollama nie jest skonfigurowana jako dostawca AI';
+  const selected = ollama.selectedModel
+    ? ` · wybrany model: ${ollama.selectedModel} (niezweryfikowany)`
+    : '';
+  if (ollama.state === 'unavailable') return `Ollama skonfigurowana, serwer nie odpowiada${selected}`;
+  if (ollama.state === 'reachable') {
+    const version = ollama.version ? ` (wersja ${ollama.version})` : '';
+    return `Serwer Ollama odpowiada${version}${selected} · inferencja niezweryfikowana`;
+  }
+  return 'Stan Ollamy niezweryfikowany';
+}
+
 function renderRuntimeStatus(status) {
   const application = status.application?.status === 'running'
     ? `${status.application.product ?? 'Aplikacja'} działa`
@@ -316,11 +338,7 @@ function renderRuntimeStatus(status) {
   setText('application-status', application);
   setText('os-status', `${distribution} · ${boot}`);
   setText('model-status', modelStatusLabel(status.model));
-  const ollama = status.ollama;
-  const ollamaText = ollama?.running
-    ? `Działa (${ollama.version}) · ${ollama.active_model || 'qwen2.5:0.5b'} (aktywny)`
-    : 'Usługa Ollama niedostępna lokalnie';
-  setText('ollama-status', ollamaText);
+  setText('ollama-status', ollamaStatusLabel(status.ollama));
   setText('task-storage-status', status.task_state ?? 'Stan pamięci zadań nieznany');
   setText('status-error', '');
   connectionState('connected', 'API dostępne');
@@ -1147,12 +1165,13 @@ function bindChatForm() {
     }
     // Explicit CLI handoff: chat never silently executes model-generated shell commands.
     // The existing authenticated terminal API remains the sole execution path.
-    if (/^\\/cli(?:\\s|$)/i.test(text)) {
+    const cliCommand = parseCliCommand(text);
+    if (cliCommand !== null) {
       if (attachment?.files?.length) {
         feedback.textContent = 'Polecenie /cli nie obsługuje załączników. Usuń obraz i spróbuj ponownie.';
         return;
       }
-      const command = text.replace(/^\\/cli\\s*/i, '').trim();
+      const command = cliCommand;
       if (!command) {
         feedback.textContent = 'Użycie: /cli pwd lub /cli ls. Dostępne są tylko polecenia dozwolone przez serwer.';
         return;
@@ -1618,3 +1637,4 @@ if (typeof document !== 'undefined') {
   }
   if (SESSION_ID_PATTERN.test(savedSession)) void loadHistory(savedSession);
 }
+
