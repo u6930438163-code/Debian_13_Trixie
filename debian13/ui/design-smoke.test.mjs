@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
+import { bindDesignControls, normalizeDesignTheme, parseFocusPreference } from './design.mjs';
 
 function repo(path) {
   return readFileSync(new URL('../../' + path, import.meta.url), 'utf8');
@@ -27,4 +28,70 @@ test('canonical modern UI exposes navigation, real terminal, diagnostics and age
   assert.match(css, /@media \(max-width:\s*360px\)/);
   assert.match(css, /--accent:\s*#38bdf8/);
   assert.match(repo('debian13/ui/dev_server.py'), /Cache-Control.*no-store/);
+});
+
+test('live GUI loads Original palette, Cosmic palette and browser-only design module', () => {
+  const html = repo('debian13/ui/index.html');
+  const css = repo('debian13/ui/styles.css');
+  for (const marker of ['src="./design.mjs"', 'data-design-theme="bastilla-shan"',
+                         'data-design-theme="original-mint"', 'data-design-theme="astyria-cosmic"',
+                         'id="chat-focus-toggle"', 'id="design-feedback"']) {
+    assert.ok(html.includes(marker), 'Missing design component: ' + marker);
+  }
+  assert.match(css, /--design-accent:\s*#75d6c2/);
+  assert.match(css, /--design-accent:\s*#38bdf8/);
+  assert.match(css, /--design-accent:\s*#b8a5ff/);
+  assert.match(html, /id="ollama-status">Stan Ollamy niezweryfikowany/);
+});
+
+test('design preferences restore safely, update controls and persist browser-only', () => {
+  const buttons = ['bastilla-shan', 'original-mint', 'astyria-cosmic'].map(theme => ({
+    dataset: { designTheme: theme }, attributes: {}, listeners: {},
+    setAttribute(k, v) { this.attributes[k] = v; },
+    addEventListener(k, cb) { this.listeners[k] = cb; },
+    click() { this.listeners.click(); },
+  }));
+  const focus = {
+    attributes: {}, listeners: {}, textContent: '',
+    setAttribute(k, v) { this.attributes[k] = v; },
+    addEventListener(k, cb) { this.listeners[k] = cb; },
+    click() { this.listeners.click(); },
+  };
+  const feedback = {textContent: ''};
+  const documentRef = {
+    documentElement: {dataset: {}},
+    querySelectorAll(selector) {
+      assert.equal(selector, 'button[data-design-theme]');
+      return buttons;
+    },
+    getElementById(id) {
+      return id === 'chat-focus-toggle' ? focus : id === 'design-feedback' ? feedback : null;
+    },
+  };
+  const store = new Map([['debian13-design-theme-v1', 'original-mint'], ['debian13-chat-focus-v1', '1']]);
+  const storage = {
+    getItem: key => store.get(key) ?? null,
+    setItem: (key, val) => {store.set(key, val);},
+  };
+  const api = bindDesignControls(documentRef, storage);
+  assert.equal(documentRef.documentElement.dataset.designTheme, 'original-mint');
+  assert.equal(buttons[1].attributes['aria-pressed'], 'true');
+  assert.equal(documentRef.documentElement.dataset.chatFocus, 'true');
+  assert.match(focus.textContent, /Pokaż agentów/);
+  buttons[2].click();
+  assert.equal(documentRef.documentElement.dataset.designTheme, 'astyria-cosmic');
+  assert.equal(store.get('debian13-design-theme-v1'), 'astyria-cosmic');
+  assert.match(feedback.textContent, /Astyria Cosmic/);
+  focus.click();
+  assert.equal(documentRef.documentElement.dataset.chatFocus, 'false');
+  assert.equal(store.get('debian13-chat-focus-v1'), '0');
+  api.setTheme('invalid');
+  assert.equal(documentRef.documentElement.dataset.designTheme, 'bastilla-shan');
+});
+
+test('invalid stored presets never inject arbitrary theme names', () => {
+  assert.equal(normalizeDesignTheme('__prototype__'), 'bastilla-shan');
+  assert.equal(normalizeDesignTheme(null), 'bastilla-shan');
+  assert.equal(parseFocusPreference('true'), false);
+  assert.equal(parseFocusPreference('1'), true);
 });
