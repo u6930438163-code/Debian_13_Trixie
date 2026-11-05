@@ -62,7 +62,7 @@ do commitów, plików `.env` wysyłanych na GitHub, kodu przeglądarki ani czatu
 Bez `MODEL_*` aplikacja automatycznie użyje:
 
 - URL: `https://generativelanguage.googleapis.com/v1beta/openai/chat/completions`
-- model tekstowy **i Vision**: `gemini-2.5-flash`
+- model tekstowy **i Vision**: `gemini-3.8-flash`
 - autoryzacja: `Authorization: Bearer <GEMINI_API_KEY>` (serwerowo)
 
 Opcjonalnie wybierz model w środowisku Codespaces przez `GEMINI_MODEL` i
