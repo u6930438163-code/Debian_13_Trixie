@@ -102,7 +102,7 @@ class UiHandler(SimpleHTTPRequestHandler):
             raw_length = self.headers.get("Content-Length", "")
             if API_TASK_CANCEL_PATH.fullmatch(path) or API_TASK_DISPATCH_PATH.fullmatch(path):
                 if raw_length not in ("", "0"):
-                    self._send_error_json(400, "Anulowanie zadania nie przyjmuje treści.")
+                    self._send_error_json(400, "Przekazanie zadania nie przyjmuje treści." if API_TASK_DISPATCH_PATH.fullmatch(path) else "Anulowanie zadania nie przyjmuje treści.")
                     return
                 body = None
             else:
