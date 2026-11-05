@@ -8,24 +8,33 @@ agents or expose Ollama on a public host port.
 
 ## Start
 
-From the repository root:
+From `debian13/system`:
 
 ```sh
-bash debian13/start-ai-session.sh
+export DEBIAN13_API_TOKEN="$(python3 -c 'import secrets; print(secrets.token_urlsafe(48))')"
+docker compose -f compose.yaml -f compose.ollama.yaml up -d --build
+docker compose -f compose.yaml -f compose.ollama.yaml exec ollama ollama pull qwen3:14b
+docker compose -f compose.yaml -f compose.ollama.yaml ps
+curl -fsS http://127.0.0.1:8080/healthz
 ```
 
-The default is `qwen2.5-coder:1.5b`, a text-only model downloaded on first
-start. Docker, outbound access, sufficient disk and memory are required.
-CPU-only inference may be slow. `OLLAMA_MODEL` selects another model; the
-20 GB container memory limit does not increase the host's available memory.
-The selected model serves the local chat profiles; it does not establish
-that independent original-agent workers are running.
+Pulling models downloads multiple gigabytes and requires sufficient RAM and
+disk. CPU-only inference on a 14B model can be slow. A 20 GB memory limit is
+configured for Ollama, but the host must actually provide that memory.
+Choose a smaller model on constrained hosts.
 
 ## Vision
 
-Vision is not configured by default. To enable it later, use a compatible
-downloaded model and set `OLLAMA_VISION_MODEL`; test image inference on the
-actual host. Pulling a model alone does not verify the complete UI flow.
+`qwen3:14b` is a text model, **not** a vision model. For image analysis:
+
+```sh
+docker compose -f compose.yaml -f compose.ollama.yaml exec ollama ollama pull qwen3-vl:8b
+```
+
+Set `OLLAMA_MODEL=qwen3-vl:8b` before starting Compose to use the vision
+model as the backend. Note: the current `/v1/chat` API only accepts text
+messages; image uploads and vision-aware chat payloads require a separate
+implementation and tests. Merely pulling Qwen3-VL does not enable vision in UI.
 
 ## Security and availability
 
@@ -46,13 +55,18 @@ The official Ollama tag is `llama3.2-vision:11b` (approximately 7.8 GB model dow
 It accepts image and text input, and returns text. Ollama recommends at least
 8 GB VRAM for GPU inference; check actual host resources before downloading.
 
-To use it for text and image requests, start the session with:
+```sh
+docker compose -f compose.yaml -f compose.ollama.yaml exec ollama ollama pull llama3.2-vision:11b
+```
+
+To select it for the current text-chat API, start Compose with:
 
 ```sh
 export OLLAMA_MODEL=llama3.2-vision:11b
-export OLLAMA_VISION_MODEL=llama3.2-vision:11b
-bash debian13/start-ai-session.sh
+docker compose -f compose.yaml -f compose.ollama.yaml up -d --build
 ```
 
-Image inference still needs to be verified on the actual host.
-
+**Important:** selecting a vision-capable model does not yet enable image uploads
+through the Debian 13 application. That needs multimodal request support in
+`server.py` and the UI. For multimodal prompts, Ollama's native `/api/chat`
+accepts an `images` array in a user message.

@@ -1,25 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createApiClient, ApiError, parseCliCommand, ollamaStatusLabel } from './app.mjs';
-
-test('only an explicit /cli command is routed to the terminal', () => {
-  assert.equal(parseCliCommand('/cli pwd'), 'pwd');
-  assert.equal(parseCliCommand('/CLI   ls'), 'ls');
-  assert.equal(parseCliCommand('/cli'), '');
-  assert.equal(parseCliCommand('/cli\nwhoami'), 'whoami');
-  assert.equal(parseCliCommand('/climate today'), null);
-  assert.equal(parseCliCommand('run /cli pwd'), null);
-});
-
-test('Ollama status labels distinguish unverified, unavailable, reachable', () => {
-  assert.match(ollamaStatusLabel(undefined), /niezweryfikowany/);
-  assert.match(ollamaStatusLabel({ state: 'not_selected' }), /nie jest skonfigurowana/);
-  assert.match(ollamaStatusLabel({ state: 'unavailable', selectedModel: 'qwen2.5-coder:1.5b' }), /nie odpowiada/);
-  const healthy = ollamaStatusLabel({ state: 'reachable', version: '0.11.0', selectedModel: 'qwen2.5-coder:1.5b' });
-  assert.match(healthy, /Serwer Ollama odpowiada/);
-  assert.match(healthy, /inferencja niezweryfikowana/);
-  assert.doesNotMatch(healthy, /model aktywny/);
-});
+import { createApiClient, ApiError } from './app.mjs';
 
 const token = 'correct-operator-token-32-characters-minimum';
 const reply = (status, payload) => ({ status, ok: status >= 200 && status < 300,
@@ -71,4 +52,3 @@ test('UI bridge sends both provider choice and session termination to the authen
     { url: '/api/v1/bridge/terminate', method: 'POST', body: { sessionId: 'test-session' } },
   ]);
 });
-

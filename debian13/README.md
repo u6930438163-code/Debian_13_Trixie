@@ -10,7 +10,7 @@ ten etap nie kopiuje ani nie zmienia jego plików backendu.
 
 Dla najnowszego serwera w `debian13/system/server.py` i interfejsu
 `debian13/ui` nie trzeba używać starego backendu z innego repo.
-Otwórz Codespace **dla gałęzi `main`** i
+Otwórz Codespace **dla gałęzi `migration/debian13-codespaces`** i
 wykonaj w terminalu repozytorium:
 
 ```bash
@@ -20,15 +20,14 @@ bash debian13/start-ai-session.sh
 Jeżeli Codespaces otworzył katalog `debian13/` jako główny, użyj
 `bash start-ai-session.sh`. Skrypt generuje prywatny token
 operatora (jeśli nie jest już ustawiony), buduje API w Dockerze, uruchamia
-Ollamę i automatycznie pobiera tekstowy model `qwen2.5-coder:1.5b`, następnie
+Ollamę i automatycznie pobiera `llama3.2-vision:11b`, następnie
 uruchamia prywatny serwer interfejsu na porcie `3000`.
 W Codespaces otwórz panel **Ports** i kliknij przekierowany **prywatny** port
 `3000`. Nie zmieniaj jego widoczności na publiczną.
 
-**Zasoby:** pierwszy start pobiera obraz Ollamy i model, wymaga więc dostępu
-do internetu, wolnego dysku i pamięci. Na CPU odpowiedzi mogą być wolne.
-Limity czasu i zasobów zależą od konta GitHub. Model można zmienić przez
-`OLLAMA_MODEL`; Vision nie jest domyślnie włączone. Serwer nie uruchamia się
+**Zasoby:** Ollama 11B Vision pobiera około 7,8 GB danych; zalecany jest
+serwer z odpowiednią pamięcią, najlepiej GPU z min. 8 GB VRAM. Mały Codespace
+może nie mieć zasobów do uruchomienia tego modelu. Serwer nie jest uruchomiony
 przez samo dodanie skryptu do repozytorium.
 
 **Inny provider AI:** aby użyć zewnętrznego OpenAI-compatible API zamiast
@@ -151,4 +150,3 @@ The fixture is not PR #95's running backend or a model.
   `not_running`. Nie uruchomiono czterech procesów agentów.
 - Nie uruchomiono płatnych usług ani nie dokonano zakupów. Każdy wydatek wymaga
   osobnej uprzedniej akceptacji.
-

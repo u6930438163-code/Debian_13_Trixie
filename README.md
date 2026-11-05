@@ -10,23 +10,7 @@ terminal ograniczony), trwałą kolejkę SQLite, konfigurację czterech
 > Skrypty uruchamiają aplikację na hoście z Pythonem (najlepiej Debian 13).
 > Testy CI budują i uruchamiają serwer na bazie Debiana 13.
 
-## Start czatu z lokalnym modelem w Codespaces
-
-W Codespace dla tego repozytorium uruchom:
-
-```bash
-bash debian13/start-ai-session.sh
-```
-
-Skrypt wymaga działającego Dockera i Compose. Uruchamia API, prywatny
-interfejs na porcie 3000 oraz Ollamę; za pierwszym razem pobiera lokalny,
-tekstowy model `qwen2.5-coder:1.5b`. Nie wymaga płatnego klucza OpenAI.
-Model można zmienić przez `OLLAMA_MODEL`. Pamięć, dysk, dostęp do internetu
-i czas pracy Codespaces nadal zależą od dostępnych zasobów i limitów konta.
-Wybierz prywatny port 3000 w panelu **Ports**. Udany start nie potwierdza
-pracy niezależnych oryginalnych agentów ani połączenia ChatGPT przez MCP.
-
-## Start interfejsu bez modelu i bez Dockera
+## Start — jedna komenda, bez Dockera i bez Copilota
 
 W nowym Codespace utworzonym z tego repo albo lokalnym terminalu:
 
@@ -72,8 +56,8 @@ bash debian13/start-local.sh
 
 Adres i klucz powyżej to **przykłady**. Nie wklejaj sekretów do GitHub
 ani do AI Studio w plikach źródłowych. Wspierane jest też uruchomienie
-z Docker Compose + Ollama poprzez `bash debian13/start-ai-session.sh`.
-Szczegóły w
+z Docker Compose + Ollama poprzez `bash debian13/start-ai-session.sh`;
+domyślny model Vision 11B wymaga znaczącej pamięci. Szczegóły w
 [`debian13/README.md`](debian13/README.md).
 
 ## Oryginalni agenci AI właściciela
@@ -148,4 +132,3 @@ changes** dla podłączonego repozytorium. Sam push na GitHub nie potwierdza
 aktualizacji uruchomionej aplikacji ani automatycznej synchronizacji.
 HTML, CSS i JavaScript nie są cache'owane w serwerach podglądu, co zmniejsza
 ryzyko wyświetlania starych zasobów.
-
