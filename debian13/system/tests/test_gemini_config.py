@@ -58,8 +58,8 @@ class GeminiConfigurationTests(unittest.TestCase):
             config = load_config()
         self.assertEqual(config["model_chat_url"], GEMINI_URL)
         self.assertEqual(config["model_api_key"], "test-gemini-key-not-a-real-secret")
-        self.assertEqual(config["model_name"], "gemini-2.5-flash")
-        self.assertEqual(config["vision_model_name"], "gemini-2.5-flash")
+        self.assertEqual(config["model_name"], "gemini-3.8-flash")
+        self.assertEqual(config["vision_model_name"], "gemini-3.8-flash")
         self.assertEqual(
             {agent: profile["name"] for agent, profile in PROFILES.items()},
             {"alex": "Alex", "aria": "Aria", "astyria": "Astyria", "aurelius": "Aurelius"},
@@ -70,11 +70,11 @@ class GeminiConfigurationTests(unittest.TestCase):
             "DEBIAN13_API_TOKEN": TOKEN,
             "GEMINI_API_KEY": "test-gemini-key",
             "GEMINI_MODEL": "gemini-3-flash-preview",
-            "GEMINI_VISION_MODEL": "gemini-2.5-flash",
+            "GEMINI_VISION_MODEL": "gemini-3.8-flash",
         }, clear=True):
             config = load_config()
         self.assertEqual(config["model_name"], "gemini-3-flash-preview")
-        self.assertEqual(config["vision_model_name"], "gemini-2.5-flash")
+        self.assertEqual(config["vision_model_name"], "gemini-3.8-flash")
 
     def test_explicit_openai_compatible_provider_keeps_its_own_credentials(self):
         with patch.dict(os.environ, {
@@ -110,17 +110,18 @@ class GeminiConfigurationTests(unittest.TestCase):
         opener = _Opener()
         with patch("server.urllib.request.build_opener", return_value=opener):
             reply, model = complete_chat("aria", "Witaj", config)
-            self.assertEqual((reply, model), ("Gemini fixture response", "gemini-2.5-flash"))
+            self.assertEqual((reply, model), ("Gemini fixture response", "gemini-3.8-flash"))
             self.assertEqual(opener.request.full_url, GEMINI_URL)
             self.assertEqual(opener.request.get_header("Authorization"), "Bearer test-gemini-key")
             payload = json.loads(opener.request.data)
             self.assertEqual(payload["messages"], [{"role": "user", "content": "Witaj"}])
             self.assertNotIn("system", [m["role"] for m in payload["messages"]])
+            self.assertNotIn("temperature", payload)
 
             reply, model = complete_chat(
                 "alex", "Opisz obraz", config, image="data:image/png;base64,aGVsbG8="
             )
-            self.assertEqual(model, "gemini-2.5-flash")
+            self.assertEqual(model, "gemini-3.8-flash")
             body = json.loads(opener.request.data)
             self.assertEqual(body["messages"][0]["content"][1]["image_url"],
                              {"url": "data:image/png;base64,aGVsbG8="})
