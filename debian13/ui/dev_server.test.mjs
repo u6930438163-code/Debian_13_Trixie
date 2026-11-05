@@ -32,7 +32,7 @@ async function startUpstreamDouble(t) {
       authorization: request.headers.authorization ?? null,
       body: Buffer.concat(chunks).toString('utf8'),
     });
-    if (request.url === '/api/v1/chat/stream') {
+    if (request.url === '/api/v1/chat/stream' || request.url === '/api/v1/terminal/stream') {
       response.writeHead(200, {
         'Content-Type': 'text/event-stream; charset=utf-8',
         'X-Upstream-Header': 'must-not-be-relayed',
@@ -290,4 +290,33 @@ test('proxy rejects query parameters on task dispatch without reaching the worke
   assert.equal(response.status, 400);
   assert.deepEqual(await response.json(), { error: 'Parametry URL API nie są obsługiwane.' });
   assert.equal(upstream.requests.length, 0, 'query-bearing dispatch must never reach the upstream gateway');
+});
+
+
+test('terminal SSE stream is forwarded incrementally without leaking upstream headers', async (t) => {
+  const upstream = await startUpstreamDouble(t);
+  const base = await startUiProxy(t, upstream.port, 'fixture-operator-token');
+  const response = await fetch(`${base}/api/v1/terminal/stream`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ command: 'printf hello' }),
+  });
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get('content-type'), 'text/event-stream; charset=utf-8');
+  assert.equal(response.headers.get('x-upstream-header'), null);
+  const reader = response.body.getReader();
+  const first = await reader.read();
+  assert.equal(first.done, false);
+  assert.match(new TextDecoder().decode(first.value), /event: meta/);
+  let rest = '';
+  for (;;) {
+    const chunk = await reader.read();
+    if (chunk.done) break;
+    rest += new TextDecoder().decode(chunk.value);
+  }
+  assert.match(rest, /event: done/);
+  assert.equal(upstream.requests.length, 1);
+  assert.equal(upstream.requests[0].url, '/api/v1/terminal/stream');
+  assert.equal(upstream.requests[0].authorization, 'Bearer fixture-operator-token');
+  assert.deepEqual(JSON.parse(upstream.requests[0].body), { command: 'printf hello' });
 });
