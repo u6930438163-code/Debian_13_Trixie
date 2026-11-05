@@ -388,6 +388,45 @@ def complete_chat(profile: str, message: str, config: dict, image: str | None = 
     return content.strip()[:MAX_MESSAGE_CHARS], model
 
 
+def probe_ollama(config: dict) -> dict:
+    """Bounded private health check, not a model-inference or worker check.
+
+    Never query an arbitrary provider URL. Only the explicitly enabled
+    Compose service at a fixed host/port is eligible for this probe.
+    """
+    try:
+        parsed = urllib.parse.urlsplit(config.get("model_chat_url", ""))
+        internal = (parsed.scheme == "http" and parsed.hostname == "ollama"
+                    and parsed.port == 11434
+                    and os.environ.get("DEBIAN13_ALLOW_INTERNAL_OLLAMA") == "1")
+    except (TypeError, ValueError):
+        internal = False
+    if not internal:
+        return {"state": "not_selected", "inference": "unverified"}
+
+    result = {
+        "state": "unavailable",
+        "selectedModel": str(config.get("model_name") or "")[:120],
+        "inference": "unverified",
+    }
+    try:
+        request = urllib.request.Request(
+            "http://ollama:11434/api/version", headers={"Accept": "application/json"}
+        )
+        # Never use proxy settings or follow redirects for this internal probe.
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirectHandler())
+        with opener.open(request, timeout=0.6) as response:
+            raw = response.read(2049)
+        if len(raw) > 2048:
+            return result
+        version = json.loads(raw).get("version")
+        if isinstance(version, str) and version.strip():
+            result.update({"state": "reachable", "version": version.strip()[:40]})
+    except (OSError, ValueError, TypeError, AttributeError):
+        pass
+    return result
+
+
 def runtime_diagnostics(server) -> dict:
     linux_security = {}
     try:
@@ -617,6 +656,7 @@ class SystemHandler(http.server.BaseHTTPRequestHandler):
         if self.path == "/api/v1/status":
             report = runtime_diagnostics(self.server)
             self._send_json(200, {
+                "ollama": probe_ollama(self.server.config),
                 "application": {"status": "running", "product": "Debian 13 Console"},
                 "operating_system": {"runtime": {
                     "distribution": platform.platform(),
