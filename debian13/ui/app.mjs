@@ -1005,6 +1005,38 @@ function syncAgentChannel() {
     : 'Wiadomości kierowane do profilu ' + name + ' przez istniejące API.');
 }
 
+// The Hyperspace launcher reuses the existing authenticated chat form and SSE
+// handler. No duplicate provider requests, fake replies or extra credentials.
+function bindHyperspaceLauncher() {
+  const form = document.getElementById('hyperspace-chat-launch-form');
+  const messageInput = document.getElementById('hyperspace-chat-message');
+  const agentSelect = document.getElementById('hyperspace-chat-agent');
+  const feedback = document.getElementById('hyperspace-chat-feedback');
+  form?.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const message = messageInput?.value.trim() ?? '';
+    const agent = agentSelect?.value;
+    if (!message || !AGENT_PROFILES.some(item => item.id === agent)) {
+      if (feedback) feedback.textContent = 'Wybierz jednego z czterech agentów i wpisz wiadomość.';
+      return;
+    }
+    const fullAgent = document.getElementById('chat-agent');
+    const fullMessage = document.getElementById('chat-message');
+    const fullForm = document.getElementById('chat-form');
+    if (!fullAgent || !fullMessage || !fullForm || typeof fullForm.requestSubmit !== 'function') {
+      if (feedback) feedback.textContent = 'Nie udało się otworzyć formularza czatu.';
+      return;
+    }
+    fullAgent.value = agent;
+    fullAgent.dispatchEvent(new Event('change', { bubbles: true }));
+    fullMessage.value = message;
+    showView('chat');
+    if (feedback) feedback.textContent = 'Przekazano do rzeczywistego czatu API.';
+    fullForm.requestSubmit();
+    messageInput.value = '';
+  });
+}
+
 function bindNavigation() {
   const menu = document.getElementById('mobile-menu');
   const backdrop = document.getElementById('sidebar-backdrop');
@@ -1619,6 +1651,7 @@ function bindBridgeForm() {
 if (typeof document !== 'undefined') {
   renderAgentProfiles(document.getElementById('agent-list'));
   bindNavigation();
+  bindHyperspaceLauncher();
   bindChatForm();
   bindTerminalForm();
   bindInteractiveScripts();
