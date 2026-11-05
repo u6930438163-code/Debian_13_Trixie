@@ -17,6 +17,14 @@ export class ApiError extends Error {
   }
 }
 
+export const LOCAL_HELP_TEXT = [
+  '/help — ta pomoc (obsługiwana w przeglądarce).',
+  '/cli <polecenie> — przekazuje dozwolone polecenie (pwd, ls, cat <plik>) do widoku Terminal.',
+  'Enter — wyślij · Shift+Enter — nowa linia.',
+  'Zdjęcie (JPEG/PNG do 8 MB) trafia do modelu Vision tylko po wysłaniu wiadomości.',
+  'Pozostałe wiadomości wymagają skonfigurowanego modelu; bez niego API zwraca 503.',
+].join('\n');
+
 // Return null for chat messages; only an explicit /cli command reaches the terminal.
 export function parseCliCommand(text) {
   if (typeof text !== 'string' || !/^\/cli(?:\s|$)/i.test(text)) return null;
@@ -208,6 +216,7 @@ export function createApiClient({
     createTask: (task) => post('tasks', task),
     getTask: (taskId) => request(`tasks/${encodeURIComponent(taskId)}`),
     getEvents: () => request('events'),
+    getDiagnostics: () => request('diagnostics'),
     getMessages: (sessionId) => request(`sessions/${encodeURIComponent(sessionId)}/messages`),
     cancelTask: (taskId) => request(`tasks/${encodeURIComponent(taskId)}/cancel`, { method: 'POST' }),
     chatStream,
@@ -286,6 +295,11 @@ function connectionState(state, label) {
   element.dataset.state = state;
   const text = element.querySelector('span:last-child');
   if (text) text.textContent = label;
+  const sidebarRuntime = document.getElementById('sidebar-runtime');
+  if (sidebarRuntime) {
+    sidebarRuntime.dataset.state = state;
+    sidebarRuntime.title = 'API: ' + label;
+  }
   setText('sidebar-runtime-label', label);
 }
 
@@ -406,9 +420,13 @@ function renderTranscriptMessages(messages) {
     );
   }
   if (!transcript.children.length) {
-    const empty = document.createElement('p');
-    empty.className = 'empty-state';
-    empty.textContent = 'Ta sesja nie ma jeszcze zapisanych wiadomości.';
+    const empty = document.createElement('div');
+    empty.className = 'empty-state chat-empty';
+    const heading = document.createElement('strong');
+    heading.textContent = 'Nowa rozmowa';
+    const hint = document.createElement('span');
+    hint.textContent = 'Ta sesja nie ma jeszcze zapisanych wiadomości. Wpisz /help, aby zobaczyć polecenia.';
+    empty.append(heading, hint);
     transcript.append(empty);
   }
 }
@@ -441,7 +459,15 @@ function renderTasks(tasks) {
     item.className = 'task-item';
     item.dataset.taskId = task.id;
     const detail = document.createElement('span');
-    detail.textContent = `${task.title || task.kind} · ${task.agent} · ${task.id}`;
+    detail.className = 'task-detail';
+    const taskTitle = document.createElement('strong');
+    taskTitle.textContent = task.title || task.kind || 'Zadanie';
+    const taskMeta = document.createElement('span');
+    taskMeta.className = 'task-meta';
+    const agentName = AGENT_PROFILES.find((profile) => profile.id === task.agent)?.name ?? task.agent;
+    taskMeta.textContent = [agentName, task.kind, task.id].filter(Boolean).join(' · ');
+    taskMeta.title = String(task.id ?? '');
+    detail.append(taskTitle, taskMeta);
     const status = document.createElement('span');
     status.className = `task-state task-${task.status}`;
     status.textContent = task.status;
@@ -873,11 +899,156 @@ async function cancelWorkTask(taskId, button) {
   }
 }
 
+function percent(used, total) {
+  const value = Number(used) / Number(total);
+  return Number.isFinite(value) && Number(total) > 0 ? Math.max(0, Math.min(100, Math.round(value * 100))) : null;
+}
+
+function setMeter(id, value) {
+  const meter = document.getElementById(id);
+  if (!meter) return;
+  meter.value = value ?? 0;
+  meter.dataset.level = value !== null && value >= 85 ? 'high' : 'normal';
+}
+
+// Pure formatter so the honest wording of each measurement is unit-testable.
+export function summarizeDiagnostics(snapshot) {
+  const cpu = snapshot?.cpu ?? {};
+  const memory = snapshot?.memory ?? {};
+  const disk = snapshot?.disk ?? {};
+  const ledger = snapshot?.taskLedger ?? {};
+  const cores = Number(cpu.logicalCores) || 0;
+  const load = typeof cpu.loadAverage1m === 'number' ? cpu.loadAverage1m : null;
+  const ramPercent = percent(memory.usedMiB, memory.totalMiB);
+  const diskPercent = percent(disk.usedGiB, disk.totalGiB);
+  const gib = (mib) => (Number(mib) / 1024).toFixed(1);
+  return {
+    cpu: load === null ? '—' : load.toFixed(2),
+    cpuNote: load === null
+      ? 'Pomiar niedostępny'
+      : `${cores || '?'} rdzeni logicznych · load average, nie procent CPU`,
+    cpuPercent: load !== null && cores ? percent(load, cores) : null,
+    ram: ramPercent === null ? '—' : `${ramPercent}%`,
+    ramNote: ramPercent === null
+      ? 'Pomiar niedostępny'
+      : `${gib(memory.usedMiB)} / ${gib(memory.totalMiB)} GiB zajęte`,
+    ramPercent,
+    disk: diskPercent === null ? '—' : `${diskPercent}%`,
+    diskNote: diskPercent === null
+      ? 'Pomiar niedostępny'
+      : `${Number(disk.usedGiB).toFixed(1)} / ${Number(disk.totalGiB).toFixed(1)} GiB zajęte`,
+    diskPercent,
+    tasks: String(Number(ledger.queued) || 0),
+    tasksNote: `Oczekujące · anulowane: ${Number(ledger.cancelled) || 0} · bez samoczynnego wykonywania`,
+  };
+}
+
+function renderDiagnosticEvents(events) {
+  const list = document.getElementById('diagnostics-events');
+  if (!list) return;
+  const fragment = document.createDocumentFragment();
+  for (const event of Array.isArray(events) ? events : []) {
+    if (typeof event?.type !== 'string') continue;
+    const item = document.createElement('li');
+    item.className = 'event-item';
+    const detail = document.createElement('span');
+    const agent = AGENT_PROFILES.find((profile) => profile.id === event.agent)?.name ?? event.agent ?? '';
+    detail.textContent = agent ? `${event.type} · ${agent}` : event.type;
+    const metadata = document.createElement('span');
+    metadata.className = 'event-metadata';
+    const time = new Date(event.at);
+    metadata.textContent = `${Number.isNaN(time.getTime()) ? 'czas nieznany' : time.toLocaleString('pl-PL')} · ${event.taskId ?? ''}`;
+    item.append(detail, metadata);
+    fragment.append(item);
+  }
+  if (!fragment.childNodes.length) {
+    const empty = document.createElement('li');
+    empty.className = 'empty-state';
+    empty.textContent = 'Brak zarejestrowanych zdarzeń zadań.';
+    fragment.append(empty);
+  }
+  list.replaceChildren(fragment);
+}
+
+let diagnosticsPending = false;
+async function loadDiagnostics() {
+  if (diagnosticsPending) return false;
+  diagnosticsPending = true;
+  const button = document.getElementById('diagnostics-refresh');
+  if (button) button.disabled = true;
+  setText('diagnostics-feedback', 'Pobieranie pomiarów z API…');
+  try {
+    const snapshot = await api.getDiagnostics();
+    const view = summarizeDiagnostics(snapshot);
+    setText('diagnostics-cpu', view.cpu);
+    setText('diagnostics-cpu-note', view.cpuNote);
+    setMeter('diagnostics-cpu-bar', view.cpuPercent);
+    setText('diagnostics-ram', view.ram);
+    setText('diagnostics-ram-note', view.ramNote);
+    setMeter('diagnostics-ram-bar', view.ramPercent);
+    setText('hyperspace-ram', view.ram === '—' ? 'Pomiar niedostępny' : `${view.ram} · ${view.ramNote}`);
+    setMeter('hyperspace-ram-bar', view.ramPercent);
+    setText('diagnostics-disk', view.disk);
+    setText('diagnostics-disk-note', view.diskNote);
+    setMeter('diagnostics-disk-bar', view.diskPercent);
+    setText('diagnostics-tasks', view.tasks);
+    setText('diagnostics-tasks-note', view.tasksNote);
+    const monitor = snapshot?.agentMonitor ?? {};
+    setText('diagnostics-agent-monitor', monitor.executionVerified === true
+      ? `Monitor potwierdził pracę ${Number(monitor.workersVerified) || 0} workerów.`
+      : monitor.enabled
+        ? `Monitor aktywny · rejestr ${monitor.registryReachable ? 'dostępny' : 'niedostępny'} · praca AI niepotwierdzona.`
+        : 'Monitor pracy w tle wyłączony. Brak potwierdzonej aktywności oryginalnych agentów.');
+    setText('diagnostics-runtime', snapshot?.runtime?.python
+      ? `Python ${snapshot.runtime.python} · ${snapshot.runtime.distribution ?? ''}`
+      : '—');
+    setText('diagnostics-boot', snapshot?.runtime?.debian13BootVerified === true ? 'Potwierdzony' : 'Niepotwierdzony');
+    const observed = new Date(snapshot?.observedAt);
+    setText('diagnostics-observed', Number.isNaN(observed.getTime()) ? '—' : observed.toLocaleString('pl-PL'));
+    renderDiagnosticEvents(snapshot?.recentEvents);
+    setText('diagnostics-feedback', 'Dane pobrane z rzeczywistego runtime API.');
+    return true;
+  } catch (error) {
+    setText('diagnostics-feedback', error.status === 404
+      ? 'Ten backend nie udostępnia diagnostyki (404).'
+      : 'Diagnostyka niedostępna: ' + error.message);
+    return false;
+  } finally {
+    diagnosticsPending = false;
+    if (button) button.disabled = false;
+  }
+}
+
+async function prepareAlexDiagnosis(event) {
+  const button = event.currentTarget;
+  if (button.disabled) return;
+  button.disabled = true;
+  setText('diagnostics-feedback', 'Zapisywanie zadania diagnozy w Work…');
+  try {
+    const result = await api.createTask({
+      agent: 'alex',
+      kind: 'audit',
+      title: 'Diagnoza runtime Debian 13',
+      description: 'Przejrzyj bieżący pomiar z widoku Diagnostyka (CPU load, RAM, dysk, zdarzenia zadań) '
+        + 'i zaproponuj działania. Zadanie do przeglądu operatora — bez root, zakupów i zdalnych poleceń.',
+    });
+    if (!result.task?.id || result.executionStarted !== false) {
+      throw new ApiError('API nie potwierdziło bezpiecznej rejestracji zadania.');
+    }
+    await Promise.all([refreshWork(), loadDiagnostics()]);
+    setText('diagnostics-feedback', 'Zadanie diagnozy zapisane w Work. Agent AI NIE został uruchomiony.');
+  } catch (error) {
+    setText('diagnostics-feedback', 'Nie zapisano zadania: ' + error.message);
+  } finally {
+    button.disabled = false;
+  }
+}
+
 async function refreshDashboard() {
   // A global refresh pulls all runtime views from the real API; it does not
   // perform a GitHub push or AI Studio import.
   const [statusOk, , , , workOk] = await Promise.all([
-    loadStatus(), loadAgents(), loadOriginalAgents(), loadIntegrations(), refreshWork(),
+    loadStatus(), loadAgents(), loadOriginalAgents(), loadIntegrations(), refreshWork(), loadDiagnostics(),
   ]);
   return statusOk === true && workOk === true;
 }
@@ -887,9 +1058,10 @@ async function synchronizeSystemView() {
   if (systemSyncPending) return;
   systemSyncPending = true;
   const button = document.getElementById('sync-system');
+  const label = button?.querySelector('.button-label') ?? button;
   if (button) {
     button.disabled = true;
-    button.textContent = '⟳ Odświeżanie…';
+    label.textContent = 'Odświeżanie…';
   }
   setText('hyperspace-sync-feedback', 'Pobieranie statusu, agentów, integracji, zadań i zdarzeń z API…');
   try {
@@ -903,7 +1075,7 @@ async function synchronizeSystemView() {
     systemSyncPending = false;
     if (button) {
       button.disabled = false;
-      button.textContent = '⟳ Odśwież dane systemu';
+      label.textContent = 'Odśwież dane systemu';
     }
   }
 }
@@ -966,6 +1138,16 @@ function showView(view) {
   }
   const titles = { hyperspace: 'Enter the Hyperspace', chat: 'W czym mogę pomóc?', work: 'Work', diagnostics: 'Diagnostyka', terminal: 'Terminal', settings: 'Status systemu' };
   setText('page-title', titles[view] ?? titles.chat);
+  document.title = `${titles[view] ?? 'Debian 13'} · Debian 13 Trixie`;
+  // Each view starts at its top; the mobile tab strip keeps the active tab visible.
+  const main = document.getElementById('main');
+  if (main && view !== 'chat') main.scrollTop = 0;
+  // Scroll only the strip itself; scrollIntoView would also shift overflow-hidden ancestors.
+  const strip = document.querySelector('.view-switch');
+  const activeTab = strip?.querySelector('.view-switch-button.is-active');
+  if (strip && activeTab && strip.clientWidth) {
+    strip.scrollLeft = activeTab.offsetLeft - (strip.clientWidth - activeTab.offsetWidth) / 2;
+  }
 }
 
 function setMobileSidebar(open) {
@@ -1045,6 +1227,7 @@ function bindNavigation() {
     button.addEventListener('click', () => {
       showView(button.dataset.view);
       if (button.dataset.view === 'work') void refreshWork();
+      if (button.dataset.view === 'diagnostics') void loadDiagnostics();
       setMobileSidebar(false);
     });
   });
@@ -1169,6 +1352,14 @@ function bindChatForm() {
     if (!text || !agent || !feedback || activeChatController || visionBusy) return;
     if (agent.value === 'wszyscy') {
       feedback.textContent = 'Czat grupowy wymaga działającego, uwierzytelnionego API czterech agentów. Wiadomości nie wysłano.';
+      return;
+    }
+    // /help is answered locally and never reaches a model provider.
+    if (/^\/help\s*$/i.test(text)) {
+      appendTranscript('user', 'Ty · polecenie lokalne', text);
+      appendTranscript('system', 'Pomoc · lokalnie, bez modelu AI', LOCAL_HELP_TEXT);
+      message.value = '';
+      feedback.textContent = 'Pomoc wyświetlona lokalnie — nic nie wysłano do API.';
       return;
     }
     // Explicit CLI handoff: chat never silently executes model-generated shell commands.
@@ -1568,6 +1759,7 @@ function bindWallpaper() {
     if (current) URL.revokeObjectURL(current);
     current = '';
     document.body.style.removeProperty('--user-wallpaper');
+    delete document.body.dataset.wallpaper;
   };
   file?.addEventListener('change', () => {
     const image = file.files?.[0];
@@ -1582,6 +1774,7 @@ function bindWallpaper() {
     current = URL.createObjectURL(image);
     // Browser-local wallpaper. Not uploaded and not persisted to any server.
     document.body.style.setProperty('--user-wallpaper', 'url("' + current + '")');
+    document.body.dataset.wallpaper = 'custom';
     setText('wallpaper-feedback', 'Własna tapeta jest widoczna w bieżącej karcie. Nie wysłano jej na serwer.');
   });
   document.getElementById('wallpaper-reset')?.addEventListener('click', () => {
@@ -1652,6 +1845,8 @@ if (typeof document !== 'undefined') {
   document.getElementById('refresh-status')?.addEventListener('click', refreshDashboard);
   document.getElementById('sync-system')?.addEventListener('click', synchronizeSystemView);
   document.getElementById('refresh-tasks')?.addEventListener('click', refreshWork);
+  document.getElementById('diagnostics-refresh')?.addEventListener('click', () => void loadDiagnostics());
+  document.getElementById('diagnose-alex')?.addEventListener('click', prepareAlexDiagnosis);
   void refreshDashboard();
   let savedSession = '';
   try {

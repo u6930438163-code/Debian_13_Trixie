@@ -464,7 +464,7 @@ class SystemHandler(http.server.BaseHTTPRequestHandler):
         events = terminal_events(command, self.server.workspace)
         try:
             for name, payload in events:
-                frame = "event: " + name + "\\n" + "data: " + json.dumps(payload, ensure_ascii=False) + "\\n\\n"
+                frame = "event: " + name + "\n" + "data: " + json.dumps(payload, ensure_ascii=False) + "\n\n"
                 self.wfile.write(frame.encode("utf-8"))
                 self.wfile.flush()
         except (BrokenPipeError, ConnectionResetError, OSError):

@@ -130,3 +130,41 @@ test('main-only Hyperspace sync refreshes real runtime views without claiming an
   assert.doesNotMatch(app, /api\.get\('mcp-info'\)/);
   assert.match(workflow, /push:\s*\n\s*branches: \[main\]/);
 });
+
+test('canonical HTML has no inline styles that the UI CSP (style-src self) would block', () => {
+  const html = repo('debian13/ui/index.html');
+  assert.doesNotMatch(html, /\sstyle\s*=/i);
+  assert.doesNotMatch(html, /<style[\s>]/i);
+  assert.doesNotMatch(html, /\son[a-z]+\s*=/i);
+  assert.match(repo('debian13/ui/dev_server.py'), /style-src 'self'/);
+});
+
+test('diagnostics view is wired to the real API and formats honest measurements', async () => {
+  const { summarizeDiagnostics, LOCAL_HELP_TEXT } = await import('./app.mjs');
+  const html = repo('debian13/ui/index.html');
+  const app = repo('debian13/ui/app.mjs');
+  assert.match(app, /getDiagnostics: \(\) => request\('diagnostics'\)/);
+  assert.match(app, /getElementById\('diagnose-alex'\)\?\.addEventListener\('click', prepareAlexDiagnosis\)/);
+  for (const id of ['diagnostics-ram-bar', 'diagnostics-disk-bar', 'diagnostics-cpu-bar', 'hyperspace-ram']) {
+    assert.ok(html.includes('id="' + id + '"'), 'Missing diagnostics element: ' + id);
+  }
+  const view = summarizeDiagnostics({
+    cpu: { logicalCores: 4, loadAverage1m: 1 },
+    memory: { totalMiB: 2048, usedMiB: 512 },
+    disk: { totalGiB: 100, usedGiB: 90 },
+    taskLedger: { queued: 3, cancelled: 1 },
+  });
+  assert.equal(view.cpu, '1.00');
+  assert.equal(view.cpuPercent, 25);
+  assert.match(view.cpuNote, /nie procent CPU/);
+  assert.equal(view.ram, '25%');
+  assert.equal(view.ramNote, '0.5 / 2.0 GiB zajęte');
+  assert.equal(view.disk, '90%');
+  assert.equal(view.tasks, '3');
+  const missing = summarizeDiagnostics({ memory: { source: 'unavailable' } });
+  assert.equal(missing.cpu, '—');
+  assert.equal(missing.ram, '—');
+  assert.equal(missing.ramPercent, null);
+  assert.match(LOCAL_HELP_TEXT, /\/cli <polecenie>/);
+  assert.match(app, /\^\\\/help\\s\*\$/);
+});

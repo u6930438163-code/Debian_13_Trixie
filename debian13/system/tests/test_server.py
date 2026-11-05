@@ -192,6 +192,22 @@ class Debian13ApiTests(unittest.TestCase):
             provider.server_close()
             worker.join(timeout=3)
 
+    def test_terminal_stream_emits_real_sse_line_breaks(self):
+        # Regression: frames were written with a literal backslash-n, which no
+        # EventSource/fetch parser can split, so the GUI terminal always failed.
+        self.connection.request("POST", "/api/v1/terminal/stream",
+                                body=json.dumps({"command": "pwd"}),
+                                headers={"Authorization": "Bearer " + TOKEN,
+                                         "Content-Type": "application/json"})
+        reply = self.connection.getresponse()
+        events = reply.read().decode("utf-8")
+        self.assertEqual(reply.status, 200)
+        frames = [frame for frame in events.split("\n\n") if frame]
+        self.assertGreaterEqual(len(frames), 2)
+        self.assertTrue(frames[0].startswith("event: meta\ndata: "))
+        self.assertTrue(frames[-1].startswith("event: done\ndata: "))
+        self.assertEqual(json.loads(frames[-1].split("data: ", 1)[1]), {"exitCode": 0})
+
     def test_real_vision_payload_to_provider_and_invalid_input_rejected(self):
         provider = ThreadingHTTPServer(("127.0.0.1", 0), ProviderHandler)
         worker = threading.Thread(target=provider.serve_forever, daemon=True)

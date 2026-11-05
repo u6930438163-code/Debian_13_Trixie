@@ -1,9 +1,10 @@
 <!doctype html>
-<html lang="pl">
+<html lang="pl" data-design-theme="hyperspace" data-active-view="hyperspace">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#060912" />
     <meta
       name="description"
       content="Niezależna konsola systemowa i projekt OS Debian 13 z API, trwałym rejestrem zadań Work, terminalem i profilami agentów."
@@ -19,19 +20,54 @@
     <script type="module" src="./design.mjs"></script>
   </head>
   <body>
+    <svg class="icon-sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+      <symbol id="i-logo" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><ellipse cx="12" cy="12" rx="10" ry="4.3" transform="rotate(-30 12 12)"/></symbol>
+      <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="7" height="7" rx="1.8"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.8"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.8"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.8"/></symbol>
+      <symbol id="i-chat" viewBox="0 0 24 24"><path d="M20.5 11.5a8.5 8.5 0 0 1-12.3 7.6L3.5 20.5l1.4-4.4A8.5 8.5 0 1 1 20.5 11.5z"/></symbol>
+      <symbol id="i-tasks" viewBox="0 0 24 24"><path d="M10 6.5h10M10 12h10M10 17.5h10"/><path d="m3.5 6.5 1.6 1.6L8 5.2M3.5 12l1.6 1.6L8 10.7M3.5 17.5l1.6 1.6L8 16.2"/></symbol>
+      <symbol id="i-pulse" viewBox="0 0 24 24"><path d="M3 12h4l2.5-7 5 14 2.5-7h4"/></symbol>
+      <symbol id="i-terminal" viewBox="0 0 24 24"><rect x="2.5" y="4" width="19" height="16" rx="3"/><path d="m7 9.5 3 2.5-3 2.5M12.5 15H17"/></symbol>
+      <symbol id="i-settings" viewBox="0 0 24 24"><path d="M4 6.5h9M18 6.5h2M4 12h3M11 12h9M4 17.5h11M19 17.5h1"/><circle cx="15.5" cy="6.5" r="2.2"/><circle cx="9" cy="12" r="2.2"/><circle cx="17" cy="17.5" r="2.2"/></symbol>
+      <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+      <symbol id="i-sidebar" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M9.5 4v16"/></symbol>
+      <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></symbol>
+      <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11.5A8 8 0 0 0 5.6 7.2L4 9"/><path d="M4 4.5V9h4.5"/><path d="M4 12.5a8 8 0 0 0 14.4 4.3L20 15"/><path d="M20 19.5V15h-4.5"/></symbol>
+      <symbol id="i-send" viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></symbol>
+      <symbol id="i-image" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="1.8"/><path d="m21 16-5-5-9 9"/></symbol>
+      <symbol id="i-stop" viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2"/></symbol>
+      <symbol id="i-cpu" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2.5"/><rect x="9.5" y="9.5" width="5" height="5" rx="1"/><path d="M9 2.5V6M15 2.5V6M9 18v3.5M15 18v3.5M2.5 9H6M2.5 15H6M18 9h3.5M18 15h3.5"/></symbol>
+      <symbol id="i-memory" viewBox="0 0 24 24"><rect x="3" y="6.5" width="18" height="10" rx="2"/><path d="M7.5 10v3M12 10v3M16.5 10v3M6 16.5V19M18 16.5V19"/></symbol>
+      <symbol id="i-disk" viewBox="0 0 24 24"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></symbol>
+      <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3.5 13.9 9l5.6 1.9-5.6 1.9L12 18.5l-1.9-5.7L4.5 10.9 10.1 9z"/><path d="M19 3.5v3M17.5 5h3"/></symbol>
+      <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3 20 6v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6z"/><path d="m9 12 2.2 2.2L15.5 10"/></symbol>
+      <symbol id="i-plug" viewBox="0 0 24 24"><path d="M9 3v5M15 3v5M6.5 8h11v3a5.5 5.5 0 0 1-11 0zM12 16.5V21"/></symbol>
+      <symbol id="i-expand" viewBox="0 0 24 24"><path d="M15 3.5h5.5V9M9 20.5H3.5V15M20.5 3.5 14 10M3.5 20.5 10 14"/></symbol>
+      <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+      <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8M21.5 20a6.5 6.5 0 0 0-4-6"/></symbol>
+      <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 2.5 4.5 14H11l-1 7.5L19.5 10H13z"/></symbol>
+      <symbol id="i-history" viewBox="0 0 24 24"><path d="M3.5 12a8.5 8.5 0 1 0 2.5-6"/><path d="M3.5 4v4.5H8"/><path d="M12 7.5V12l3 2"/></symbol>
+      <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5.5M12 7.6v.1"/></symbol>
+      <symbol id="i-play" viewBox="0 0 24 24"><path d="M7.5 5v14l11-7z"/></symbol>
+      <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 15v3a2.5 2.5 0 0 0 2.5 2.5h11A2.5 2.5 0 0 0 20 18v-3"/></symbol>
+      <symbol id="i-palette" viewBox="0 0 24 24"><path d="M12 3a9 9 0 0 0 0 18c1.4 0 2-1 2-2 0-1.6 1.2-2.5 2.7-2.5H18a3 3 0 0 0 3-3C21 7.6 17 3 12 3z"/><circle cx="7.5" cy="11" r="1.2"/><circle cx="10.5" cy="7" r="1.2"/><circle cx="15.5" cy="7.5" r="1.2"/></symbol>
+      <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+    </svg>
+
+    <a class="skip-link" href="#main">Przejdź do treści</a>
+
     <div class="app-shell">
       <header class="topbar">
         <button id="mobile-menu" class="icon-button mobile-menu" type="button" aria-label="Otwórz panel boczny" aria-expanded="false" aria-controls="sidebar">
-          <span aria-hidden="true">☰</span>
+          <svg class="icon" aria-hidden="true"><use href="#i-menu"/></svg>
         </button>
         <a class="brand" href="./" aria-label="Debian 13 Console — pulpit">
-          <span class="brand-mark" aria-hidden="true">D13</span>
-          <span>
-            <strong>Debian 13</strong>
-            <span class="brand-subtitle">Trixie · Hyperspace Desktop</span>
+          <span class="brand-mark" aria-hidden="true"><svg class="icon"><use href="#i-logo"/></svg></span>
+          <span class="brand-text">
+            <strong>Debian 13 <span class="brand-accent">Trixie</span></strong>
+            <span class="brand-subtitle">Hyperspace Desktop · AI Workspace</span>
           </span>
         </a>
-        <div id="connection-status" class="runtime-pill" role="status" aria-live="polite">
+        <div id="connection-status" class="runtime-pill" role="status" aria-live="polite" data-state="loading">
           <span class="status-dot" aria-hidden="true"></span>
           <span>Łączenie z runtime…</span>
         </div>
@@ -42,41 +78,43 @@
         <aside id="sidebar" class="sidebar" aria-label="Panel nawigacyjny">
           <div class="sidebar-heading">
             <button id="new-chat" class="new-chat-button" type="button" aria-label="Nowy czat">
-              <span aria-hidden="true">＋</span><span class="nav-label">Nowy czat</span>
+              <svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg><span class="nav-label">Nowy czat</span>
             </button>
             <button id="sidebar-collapse" class="icon-button collapse-button" type="button" aria-label="Zwiń panel boczny" aria-expanded="true">
-              <span aria-hidden="true">⇤</span>
+              <svg class="icon" aria-hidden="true"><use href="#i-sidebar"/></svg>
             </button>
           </div>
 
           <nav class="primary-nav" aria-label="Widoki">
-            <button class="nav-button is-active" type="button" data-view="hyperspace" aria-current="page" aria-label="Pulpit Hyperspace"><span class="nav-icon" aria-hidden="true">◈</span><span class="nav-label">Pulpit Hyperspace</span></button>
-            <button class="nav-button" type="button" data-view="chat" aria-label="Czat">
-              <span class="nav-icon" aria-hidden="true">◉</span><span class="nav-label">Czat</span>
+            <button class="nav-button is-active" type="button" data-view="hyperspace" aria-current="page" aria-label="Pulpit Hyperspace" title="Pulpit Hyperspace">
+              <svg class="icon nav-icon" aria-hidden="true"><use href="#i-grid"/></svg><span class="nav-label">Pulpit</span>
             </button>
-            <button class="nav-button" type="button" data-view="work" aria-label="Work">
-              <span class="nav-icon" aria-hidden="true">▤</span><span class="nav-label">Work</span>
+            <button class="nav-button" type="button" data-view="chat" aria-label="Czat" title="Czat">
+              <svg class="icon nav-icon" aria-hidden="true"><use href="#i-chat"/></svg><span class="nav-label">Czat</span>
             </button>
-            <button class="nav-button" type="button" data-view="diagnostics" aria-label="Command Center — diagnostyka">
-              <span class="nav-icon" aria-hidden="true">✚</span><span class="nav-label">Diagnostyka</span>
+            <button class="nav-button" type="button" data-view="work" aria-label="Work" title="Work">
+              <svg class="icon nav-icon" aria-hidden="true"><use href="#i-tasks"/></svg><span class="nav-label">Work</span>
             </button>
-            <button class="nav-button" type="button" data-view="terminal" aria-label="Terminal">
-              <span class="nav-icon" aria-hidden="true">›_</span><span class="nav-label">Terminal</span>
+            <button class="nav-button" type="button" data-view="diagnostics" aria-label="Command Center — diagnostyka" title="Diagnostyka">
+              <svg class="icon nav-icon" aria-hidden="true"><use href="#i-pulse"/></svg><span class="nav-label">Diagnostyka</span>
             </button>
-            <button class="nav-button" type="button" data-view="settings" aria-label="Ustawienia">
-              <span class="nav-icon" aria-hidden="true">⚙</span><span class="nav-label">Ustawienia</span>
+            <button class="nav-button" type="button" data-view="terminal" aria-label="Terminal" title="Terminal">
+              <svg class="icon nav-icon" aria-hidden="true"><use href="#i-terminal"/></svg><span class="nav-label">Terminal</span>
+            </button>
+            <button class="nav-button" type="button" data-view="settings" aria-label="Ustawienia" title="Ustawienia">
+              <svg class="icon nav-icon" aria-hidden="true"><use href="#i-settings"/></svg><span class="nav-label">Ustawienia</span>
             </button>
           </nav>
 
           <section class="sidebar-section history-section" aria-labelledby="history-title">
-            <h2 id="history-title" class="sidebar-section-title">Historia</h2>
+            <h2 id="history-title" class="sidebar-section-title"><svg class="icon" aria-hidden="true"><use href="#i-history"/></svg>Historia</h2>
             <ul id="chat-history" class="chat-history" aria-label="Ostatnie rozmowy">
               <li class="history-empty">Brak zapisanych rozmów.</li>
             </ul>
           </section>
 
           <section class="sidebar-section channel-section" aria-labelledby="channel-title">
-            <h2 id="channel-title" class="sidebar-section-title">Profile</h2>
+            <h2 id="channel-title" class="sidebar-section-title"><svg class="icon" aria-hidden="true"><use href="#i-users"/></svg>Profile</h2>
             <label class="channel-select-label" for="chat-agent">Kanał rozmowy · oryginalni agenci</label>
             <select id="chat-agent" name="agent" aria-label="Wybierz profil agenta">
               <option value="aria">Aria</option>
@@ -89,123 +127,123 @@
             <p class="sidebar-note">Profile nie oznaczają uruchomionych agentów ani uprawnień root. Połączenie potwierdza źródłowe API.</p>
           </section>
 
-          <div class="sidebar-runtime">
+          <div id="sidebar-runtime" class="sidebar-runtime" data-state="loading" title="Stan API">
             <span class="status-dot" aria-hidden="true"></span>
-            <span class="nav-label">API: <span id="sidebar-runtime-label">sprawdzanie…</span></span>
+            <span class="nav-label" id="sidebar-runtime-label">Sprawdzanie API…</span>
           </div>
         </aside>
 
-        <main class="main-content">
+        <main id="main" class="main-content" tabindex="-1">
           <section class="view-intro" aria-labelledby="page-title">
-            <div>
+            <div class="view-intro-text visually-hidden">
               <p class="eyebrow">DEBIAN 13 TRIXIE · HYPERSPACE DESKTOP</p>
               <h1 id="page-title">Enter the Hyperspace</h1>
               <p>Przestrzeń AI i Debian 13: prawdziwe API, zadania Work, interaktywny terminal. Bez symulowanych agentów.</p>
             </div>
             <div class="view-switch" role="group" aria-label="Widok pracy">
-              <button class="view-switch-button is-active" type="button" data-view="hyperspace" aria-pressed="true">Pulpit</button>
-              <button class="view-switch-button" type="button" data-view="chat" aria-pressed="false">Czat</button>
-              <button class="view-switch-button" type="button" data-view="work" aria-pressed="false">Work</button>
-              <button class="view-switch-button" type="button" data-view="diagnostics" aria-pressed="false">Diagnostyka</button>
-              <button class="view-switch-button" type="button" data-view="terminal" aria-pressed="false">Terminal</button>
-              <button class="view-switch-button" type="button" data-view="settings" aria-pressed="false">Ustawienia</button>
+              <button class="view-switch-button is-active" type="button" data-view="hyperspace" aria-pressed="true"><svg class="icon" aria-hidden="true"><use href="#i-grid"/></svg>Pulpit</button>
+              <button class="view-switch-button" type="button" data-view="chat" aria-pressed="false"><svg class="icon" aria-hidden="true"><use href="#i-chat"/></svg>Czat</button>
+              <button class="view-switch-button" type="button" data-view="work" aria-pressed="false"><svg class="icon" aria-hidden="true"><use href="#i-tasks"/></svg>Work</button>
+              <button class="view-switch-button" type="button" data-view="diagnostics" aria-pressed="false"><svg class="icon" aria-hidden="true"><use href="#i-pulse"/></svg>Diagnostyka</button>
+              <button class="view-switch-button" type="button" data-view="terminal" aria-pressed="false"><svg class="icon" aria-hidden="true"><use href="#i-terminal"/></svg>Terminal</button>
+              <button class="view-switch-button" type="button" data-view="settings" aria-pressed="false"><svg class="icon" aria-hidden="true"><use href="#i-settings"/></svg>Ustawienia</button>
             </div>
           </section>
 
           <!-- Source design: SVL_System/src/components/BastillaDashboard.tsx -->
           <section id="hyperspace-view" class="workspace-view hyperspace-view" aria-labelledby="hyperspace-title">
-            <header class="hyperspace-statusbar">
-              <div class="hyperspace-logo" aria-hidden="true">◈</div>
-              <div class="hyperspace-brand"><strong>DEBIAN 13 <span>TRIXIE</span></strong><small>HYPERSPACE DESKTOP · INSPIROWANY SVL_SYSTEM</small></div>
-              <div class="hyperspace-runtime" role="status" aria-live="polite">
-                <span id="hyperspace-api-state">API: sprawdzanie…</span>
-                <span id="hyperspace-model-state">Model: niezweryfikowany</span>
-              </div>
-            </header>
             <div class="hyperspace-hero-grid">
-              <section class="hyperspace-hero">
+              <section class="hyperspace-hero card card-glow">
                 <div class="hyperspace-kicker"><span aria-hidden="true" class="hyperspace-orbit"></span> PRZESTRZEŃ SYSTEMOWA · RZECZYWISTE API</div>
                 <h2 id="hyperspace-title">Enter the <span>Hyperspace</span></h2>
-                <p>Jedno centrum sterowania Debian 13: rozmowy z agentami Aria, Alex, Astyria i Aurelius, interaktywny terminal, Work, diagnostyka i integracje. Stan działania ustala API — obecność kafelka nie oznacza uruchomionego workera.</p>
-                <div class="hyperspace-hero-actions">
-                  <button class="hyperspace-button is-primary" type="button" data-view="chat">◉ Otwórz czat AI</button>
-                  <button class="hyperspace-button" type="button" data-view="terminal">›_ Konsola CLI</button>
-                  <button id="sync-system" class="hyperspace-button" type="button" title="Odświeża dane API; import kodu z GitHub do AI Studio wykonaj osobno">⟳ Odśwież dane systemu</button>
+                <p class="hyperspace-lead">Jedno centrum sterowania Debian 13: rozmowy z agentami Aria, Alex, Astyria i Aurelius, interaktywny terminal, Work, diagnostyka i integracje. Stan działania ustala API — obecność kafelka nie oznacza uruchomionego workera.</p>
+                <div class="hyperspace-runtime" role="status" aria-live="polite">
+                  <span class="chip" id="hyperspace-api-state">API: sprawdzanie…</span>
+                  <span class="chip" id="hyperspace-model-state">Model: niezweryfikowany</span>
                 </div>
-                <p id="hyperspace-sync-feedback" class="hyperspace-footer-note" role="status" aria-live="polite">Odświeżenie pobiera dane z API. Import kodu z GitHub do AI Studio jest osobną operacją.</p>
+                <div class="hyperspace-hero-actions">
+                  <button class="button button-primary" type="button" data-view="chat"><svg class="icon" aria-hidden="true"><use href="#i-chat"/></svg>Otwórz czat AI</button>
+                  <button class="button button-secondary" type="button" data-view="terminal"><svg class="icon" aria-hidden="true"><use href="#i-terminal"/></svg>Konsola CLI</button>
+                  <button id="sync-system" class="button button-ghost" type="button" title="Odświeża dane API; import kodu z GitHub do AI Studio wykonaj osobno"><svg class="icon" aria-hidden="true"><use href="#i-refresh"/></svg><span class="button-label">Odśwież dane systemu</span></button>
+                </div>
+                <p id="hyperspace-sync-feedback" class="hint" role="status" aria-live="polite">Odświeżenie pobiera dane z API. Import kodu z GitHub do AI Studio jest osobną operacją.</p>
               </section>
-              <section class="hyperspace-console" aria-label="Skrót do funkcji systemowych">
-                <div class="hyperspace-console-title"><span>◈</span> PULPIT OPERACYJNY</div>
-                <p>Widoki połączone z rzeczywistym backendem Debian 13.</p>
+              <section class="hyperspace-console card" aria-label="Skrót do funkcji systemowych">
+                <div class="card-title"><svg class="icon" aria-hidden="true"><use href="#i-bolt"/></svg>Pulpit operacyjny</div>
+                <p class="muted">Widoki połączone z rzeczywistym backendem Debian 13.</p>
                 <div class="hyperspace-mini">
                   <div><span>API systemowe</span><strong id="hyperspace-runtime-indicator">Oczekiwanie na pomiar</strong></div>
+                  <div><span>Pamięć RAM</span><strong id="hyperspace-ram">—</strong><progress id="hyperspace-ram-bar" class="meter" max="100" value="0" aria-label="Wykorzystanie pamięci RAM"></progress></div>
                   <div><span>Agenci</span><strong>4 profile · workery do weryfikacji</strong></div>
                   <div><span>Synchronizacja kodu</span><strong>GitHub main → AI Studio: Pull changes</strong></div>
                 </div>
               </section>
             </div>
-            <div class="hyperspace-module-heading"><div><small>OBSZAR ROBOCZY</small><h3>Moduły systemu</h3></div><span>Wybierz widok</span></div>
+            <div class="hyperspace-module-heading"><div><p class="eyebrow">OBSZAR ROBOCZY</p><h3>Moduły systemu</h3></div></div>
             <div class="hyperspace-modules">
-              <button type="button" data-view="chat" class="hyperspace-module"><span class="hyperspace-module-icon">◉</span><strong>Dialog agentów</strong><small>Czat i kanały oryginalnych agentów</small></button>
-              <button type="button" data-view="terminal" class="hyperspace-module"><span class="hyperspace-module-icon">›_</span><strong>Konsola CLI</strong><small>Interaktywny terminal i skrypty</small></button>
-              <button type="button" data-view="work" class="hyperspace-module"><span class="hyperspace-module-icon">▤</span><strong>Centrum zadań</strong><small>Work i kolejka SQLite</small></button>
-              <button type="button" data-view="diagnostics" class="hyperspace-module"><span class="hyperspace-module-icon">✚</span><strong>Telemetria</strong><small>Stan API, CPU, RAM i agentów</small></button>
-              <button type="button" data-view="settings" class="hyperspace-module"><span class="hyperspace-module-icon">⚙</span><strong>Integracje</strong><small>MCP, Ollama, Codex i konfiguracja</small></button>
+              <button type="button" data-view="chat" class="hyperspace-module"><span class="module-icon"><svg class="icon" aria-hidden="true"><use href="#i-chat"/></svg></span><strong>Dialog agentów</strong><small>Czat i kanały oryginalnych agentów</small><svg class="icon module-arrow" aria-hidden="true"><use href="#i-arrow"/></svg></button>
+              <button type="button" data-view="terminal" class="hyperspace-module"><span class="module-icon"><svg class="icon" aria-hidden="true"><use href="#i-terminal"/></svg></span><strong>Konsola CLI</strong><small>Interaktywny terminal i skrypty</small><svg class="icon module-arrow" aria-hidden="true"><use href="#i-arrow"/></svg></button>
+              <button type="button" data-view="work" class="hyperspace-module"><span class="module-icon"><svg class="icon" aria-hidden="true"><use href="#i-tasks"/></svg></span><strong>Centrum zadań</strong><small>Work i kolejka SQLite</small><svg class="icon module-arrow" aria-hidden="true"><use href="#i-arrow"/></svg></button>
+              <button type="button" data-view="diagnostics" class="hyperspace-module"><span class="module-icon"><svg class="icon" aria-hidden="true"><use href="#i-pulse"/></svg></span><strong>Telemetria</strong><small>Stan API, CPU, RAM i agentów</small><svg class="icon module-arrow" aria-hidden="true"><use href="#i-arrow"/></svg></button>
+              <button type="button" data-view="settings" class="hyperspace-module"><span class="module-icon"><svg class="icon" aria-hidden="true"><use href="#i-plug"/></svg></span><strong>Integracje</strong><small>MCP, Ollama, Codex i konfiguracja</small><svg class="icon module-arrow" aria-hidden="true"><use href="#i-arrow"/></svg></button>
             </div>
-            <p class="hyperspace-footer-note">Hyperspace Desktop to interfejs aplikacji, nie dowód uruchomienia pełnego systemu operacyjnego ani autonomicznych agentów.</p>
+            <p class="hint">Hyperspace Desktop to interfejs aplikacji, nie dowód uruchomienia pełnego systemu operacyjnego ani autonomicznych agentów.</p>
           </section>
 
           <section id="chat-view" class="workspace-view chat-view" aria-label="Czat" hidden>
             <div class="chat-workspace-heading">
-              <div><span class="eyebrow">TWOJE CENTRUM DOWODZENIA</span><h2>Rozmowy z agentami AI</h2>
+              <div>
+                <p class="eyebrow">TWOJE CENTRUM DOWODZENIA</p>
+                <h2>Rozmowy z agentami AI</h2>
                 <p id="agent-channel-feedback" class="chat-workspace-subtitle">Wybierz oryginalnego agenta. Połączenie jest weryfikowane przez API.</p>
               </div>
               <div class="chat-heading-actions">
-                <button id="chat-focus-toggle" class="button button-secondary" type="button" aria-pressed="false" aria-controls="agent-tiles">⤢ Duży czat</button>
-                <button id="new-chat-inline" class="button button-secondary" type="button">＋ Nowy czat</button>
+                <button id="chat-focus-toggle" class="button button-ghost button-small" type="button" aria-pressed="false" aria-controls="agent-tiles">⤢ Duży czat</button>
+                <button id="new-chat-inline" class="button button-secondary button-small" type="button"><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg>Nowy czat</button>
               </div>
             </div>
             <div id="agent-tiles" class="agent-tiles" role="group" aria-label="Oryginalni agenci AI">
-              <button type="button" class="agent-tile" data-agent-channel="aria" aria-pressed="true"><span class="agent-avatar avatar-aria">AR</span><span><strong>Aria</strong><small>Bez specjalizacji</small><em data-tile-status="aria">Sprawdzanie…</em></span></button>
-              <button type="button" class="agent-tile" data-agent-channel="alex" aria-pressed="false"><span class="agent-avatar avatar-alex">AL</span><span><strong>Alex</strong><small>Bez specjalizacji</small><em data-tile-status="alex">Sprawdzanie…</em></span></button>
-              <button type="button" class="agent-tile" data-agent-channel="astyria" aria-pressed="false"><span class="agent-avatar avatar-astyria">AS</span><span><strong>Astyria</strong><small>Bez specjalizacji</small><em data-tile-status="astyria">Sprawdzanie…</em></span></button>
-              <button type="button" class="agent-tile" data-agent-channel="aurelius" aria-pressed="false"><span class="agent-avatar avatar-aurelius">AU</span><span><strong>Aurelius</strong><small>Bez specjalizacji</small><em data-tile-status="aurelius">Sprawdzanie…</em></span></button>
+              <button type="button" class="agent-tile" data-agent-channel="aria" aria-pressed="true"><span class="agent-avatar avatar-aria" aria-hidden="true">AR</span><span class="agent-tile-text"><strong>Aria</strong><small>Bez specjalizacji</small><em data-tile-status="aria">Sprawdzanie…</em></span></button>
+              <button type="button" class="agent-tile" data-agent-channel="alex" aria-pressed="false"><span class="agent-avatar avatar-alex" aria-hidden="true">AL</span><span class="agent-tile-text"><strong>Alex</strong><small>Bez specjalizacji</small><em data-tile-status="alex">Sprawdzanie…</em></span></button>
+              <button type="button" class="agent-tile" data-agent-channel="astyria" aria-pressed="false"><span class="agent-avatar avatar-astyria" aria-hidden="true">AS</span><span class="agent-tile-text"><strong>Astyria</strong><small>Bez specjalizacji</small><em data-tile-status="astyria">Sprawdzanie…</em></span></button>
+              <button type="button" class="agent-tile" data-agent-channel="aurelius" aria-pressed="false"><span class="agent-avatar avatar-aurelius" aria-hidden="true">AU</span><span class="agent-tile-text"><strong>Aurelius</strong><small>Bez specjalizacji</small><em data-tile-status="aurelius">Sprawdzanie…</em></span></button>
             </div>
             <div class="channel-notice" id="group-channel-notice" hidden>„Wszyscy” wymaga rzeczywistej bramy wiadomości między oryginalnymi agentami. Wysyłanie jest chwilowo zablokowane, żeby nie udawać czatu grupowego.</div>
-            <div id="chat-transcript" class="transcript" aria-label="Rozmowa" aria-live="polite" aria-relevant="additions text">
-              <p class="empty-state">
-                Wybierz profil i wyślij wiadomość. <code>/help</code> działa lokalnie;
-                pozostałe wiadomości wymagają dostępnego modelu.
-              </p>
+            <div id="chat-transcript" class="transcript" aria-label="Rozmowa" aria-live="polite" aria-relevant="additions text" tabindex="0">
+              <div class="empty-state chat-empty">
+                <span class="chat-empty-icon" aria-hidden="true"><svg class="icon"><use href="#i-spark"/></svg></span>
+                <strong>W czym mogę pomóc?</strong>
+                <span>Wybierz profil i wyślij wiadomość. <code>/help</code> działa lokalnie, <code>/cli pwd</code> przekazuje polecenie do terminala; pozostałe wiadomości wymagają dostępnego modelu.</span>
+              </div>
             </div>
-            <form id="chat-form" class="composer">
+            <form id="chat-form" class="composer chat-composer">
               <label class="visually-hidden" for="chat-message">Wiadomość</label>
               <textarea
                 id="chat-message"
                 name="message"
                 rows="2"
                 maxlength="12000"
-                placeholder="Napisz wiadomość…"
+                placeholder="Napisz wiadomość…  (Enter — wyślij, Shift+Enter — nowa linia)"
                 autocomplete="off"
                 required
               ></textarea>
-              <div class="vision-attachment">
-                <label class="button button-secondary vision-select" for="chat-image">
-                  <span aria-hidden="true">▧</span> Dodaj zdjęcie (Vision)
-                </label>
-                <input id="chat-image" type="file" accept="image/jpeg,image/png" aria-label="Dodaj zdjęcie do analizy Llama Vision" />
-                <div id="chat-image-preview" class="vision-preview" hidden>
-                  <img id="chat-image-thumbnail" alt="Wybrane zdjęcie do analizy" />
-                  <span id="chat-image-name"></span>
-                  <button id="chat-image-remove" class="button button-secondary" type="button">Usuń</button>
-                </div>
+              <div id="chat-image-preview" class="vision-preview" hidden>
+                <img id="chat-image-thumbnail" alt="Wybrane zdjęcie do analizy" />
+                <span id="chat-image-name"></span>
+                <button id="chat-image-remove" class="icon-button icon-button-small" type="button" aria-label="Usuń zdjęcie" title="Usuń zdjęcie"><svg class="icon" aria-hidden="true"><use href="#i-x"/></svg></button>
               </div>
-              <div class="form-footer">
+              <div class="composer-toolbar">
+                <div class="vision-attachment">
+                  <input id="chat-image" class="file-input" type="file" accept="image/jpeg,image/png" aria-label="Dodaj zdjęcie do analizy Llama Vision" />
+                  <label class="button button-ghost button-small vision-select" for="chat-image" title="Dodaj zdjęcie (Vision)">
+                    <svg class="icon" aria-hidden="true"><use href="#i-image"/></svg><span>Zdjęcie</span>
+                  </label>
+                </div>
                 <p id="chat-feedback" class="form-feedback" aria-live="polite">
                   Wiadomość zostanie wysłana po połączeniu z API.
                 </p>
-                <button id="chat-submit" type="submit" class="button button-primary">Wyślij</button>
-                <button id="chat-stop" class="button button-secondary" type="button" hidden>Zatrzymaj</button>
+                <button id="chat-submit" type="submit" class="button button-primary send-button" aria-label="Wyślij"><svg class="icon" aria-hidden="true"><use href="#i-send"/></svg><span>Wyślij</span></button>
+                <button id="chat-stop" class="button button-danger" type="button" hidden>Zatrzymaj</button>
               </div>
             </form>
           </section>
@@ -218,88 +256,136 @@
               </div>
               <button id="refresh-tasks" class="button button-secondary" type="button">Ponów połączenie</button>
             </div>
-            <p id="work-connection-state" class="form-feedback" role="status" aria-live="polite">
+            <p id="work-connection-state" class="form-feedback status-line" role="status" aria-live="polite">
               Work połączy się z API po otwarciu widoku.
             </p>
-            <p class="work-limit-note">
-              Zadania są trwale zapisywane w API do przeglądu. Wysłanie zadania
-              NIE uruchamia agenta AI, nie wykonuje kodu i nie zatwierdza zakupów.
-              Każdy etap wykonania wymaga osobnego, rzeczywiście działającego workera.
-            </p>
-            <form id="work-create-form" class="work-task-form" aria-labelledby="work-create-title">
-              <h3 id="work-create-title">Dodaj zadanie do kolejki</h3>
-              <label for="work-task-agent">Agent odpowiedzialny za plan</label>
-              <select id="work-task-agent" required>
-                <option value="alex">Alex</option>
-                <option value="aria">Aria</option>
-                <option value="astyria">Astyria</option>
-                <option value="aurelius">Aurelius</option>
-              </select>
-              <label for="work-task-kind">Rodzaj zadania</label>
-              <select id="work-task-kind" required>
-                <option value="development">Rozwój</option>
-                <option value="bugfix">Naprawa</option>
-                <option value="audit">Audyt</option>
-                <option value="research">Analiza</option>
-              </select>
-              <label for="work-task-title">Tytuł</label>
-              <input id="work-task-title" maxlength="120" required placeholder="Np. Dokończ API zadań Debian 13" />
-              <label for="work-task-description">Zakres i kryteria ukończenia</label>
-              <textarea id="work-task-description" rows="3" maxlength="2000" required placeholder="Co należy wykonać i jak potwierdzić efekt?"></textarea>
-              <button class="button button-primary" id="work-create-submit" type="submit">Zapisz do przeglądu</button>
-              <p id="work-create-feedback" role="status" aria-live="polite" class="form-feedback"></p>
-            </form>
-            <p id="alex-dispatch-state" class="work-limit-note" role="status" aria-live="polite">
-              Oryginalny Alex: oczekuje na sprawdzenie możliwości wysyłania zadań.
-              Przekazanie polecenia nie oznacza zakończenia pracy.
-            </p>
-            <p id="tasks-error" class="status-error" aria-live="polite"></p>
-            <p id="tasks-count" class="muted-count">Ładowanie…</p>
-            <ul id="task-list" class="task-list" aria-live="polite">
-              <li class="empty-state">Pobieranie zadań…</li>
-            </ul>
-            <section class="event-log" aria-labelledby="events-title">
-              <div class="section-heading">
-                <div>
-                  <p class="eyebrow">RZECZYWISTY DZIENNIK API</p>
-                  <h2 id="events-title">Zdarzenia zadań</h2>
-                </div>
+            <div class="work-grid">
+              <div class="work-side">
+                <form id="work-create-form" class="work-task-form card" aria-labelledby="work-create-title">
+                  <h3 id="work-create-title">Dodaj zadanie do kolejki</h3>
+                  <div class="field-row">
+                    <div class="field">
+                      <label for="work-task-agent">Agent odpowiedzialny</label>
+                      <select id="work-task-agent" required>
+                        <option value="alex">Alex</option>
+                        <option value="aria">Aria</option>
+                        <option value="astyria">Astyria</option>
+                        <option value="aurelius">Aurelius</option>
+                      </select>
+                    </div>
+                    <div class="field">
+                      <label for="work-task-kind">Rodzaj zadania</label>
+                      <select id="work-task-kind" required>
+                        <option value="development">Rozwój</option>
+                        <option value="bugfix">Naprawa</option>
+                        <option value="audit">Audyt</option>
+                        <option value="research">Analiza</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="field">
+                    <label for="work-task-title">Tytuł</label>
+                    <input id="work-task-title" maxlength="120" required placeholder="Np. Dokończ API zadań Debian 13" />
+                  </div>
+                  <div class="field">
+                    <label for="work-task-description">Zakres i kryteria ukończenia</label>
+                    <textarea id="work-task-description" rows="4" maxlength="2000" required placeholder="Co należy wykonać i jak potwierdzić efekt?"></textarea>
+                  </div>
+                  <button class="button button-primary" id="work-create-submit" type="submit"><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg>Zapisz do przeglądu</button>
+                  <p id="work-create-feedback" role="status" aria-live="polite" class="form-feedback"></p>
+                </form>
+                <p class="notice">
+                  <svg class="icon" aria-hidden="true"><use href="#i-info"/></svg>
+                  <span>Zadania są trwale zapisywane w API do przeglądu. Wysłanie zadania
+                  NIE uruchamia agenta AI, nie wykonuje kodu i nie zatwierdza zakupów.
+                  Każdy etap wykonania wymaga osobnego, rzeczywiście działającego workera.</span>
+                </p>
+                <p id="alex-dispatch-state" class="notice notice-neutral" role="status" aria-live="polite">
+                  Oryginalny Alex: oczekuje na sprawdzenie możliwości wysyłania zadań.
+                  Przekazanie polecenia nie oznacza zakończenia pracy.
+                </p>
               </div>
-              <p class="work-limit-note">
-                Tylko zdarzenia cyklu życia zarejestrowane przez backend w pamięci procesu;
-                nie jest to strumień na żywo ani systemowy dziennik Debiana.
-              </p>
-              <p id="events-error" class="status-error" aria-live="polite"></p>
-              <p id="events-count" class="muted-count">Ładowanie…</p>
-              <ul id="event-list" class="event-list" aria-live="polite">
-                <li class="empty-state">Pobieranie zdarzeń…</li>
-              </ul>
-            </section>
+              <div class="work-main">
+                <section class="card" aria-labelledby="tasks-title">
+                  <div class="card-heading">
+                    <h3 id="tasks-title">Kolejka zadań</h3>
+                    <p id="tasks-count" class="muted-count">Ładowanie…</p>
+                  </div>
+                  <p id="tasks-error" class="status-error" aria-live="polite"></p>
+                  <ul id="task-list" class="task-list" aria-live="polite">
+                    <li class="empty-state">Pobieranie zadań…</li>
+                  </ul>
+                </section>
+                <section class="event-log card" aria-labelledby="events-title">
+                  <div class="card-heading">
+                    <div>
+                      <p class="eyebrow">RZECZYWISTY DZIENNIK API</p>
+                      <h3 id="events-title">Zdarzenia zadań</h3>
+                    </div>
+                    <p id="events-count" class="muted-count">Ładowanie…</p>
+                  </div>
+                  <p class="hint">
+                    Tylko zdarzenia cyklu życia zarejestrowane przez backend;
+                    nie jest to strumień na żywo ani systemowy dziennik Debiana.
+                  </p>
+                  <p id="events-error" class="status-error" aria-live="polite"></p>
+                  <ul id="event-list" class="event-list" aria-live="polite">
+                    <li class="empty-state">Pobieranie zdarzeń…</li>
+                  </ul>
+                </section>
+              </div>
+            </div>
           </section>
 
           <section id="diagnostics-view" class="workspace-view diagnostics-view" aria-labelledby="diagnostics-title" hidden>
             <div class="section-heading">
               <div><p class="eyebrow">COMMAND CENTER · DANE Z RZECZYWISTEGO RUNTIME</p><h2 id="diagnostics-title">Diagnostyka systemu i agentów AI</h2></div>
-              <button id="diagnostics-refresh" type="button" class="button button-secondary">Odśwież dane</button>
+              <button id="diagnostics-refresh" type="button" class="button button-secondary"><svg class="icon" aria-hidden="true"><use href="#i-refresh"/></svg>Odśwież dane</button>
             </div>
-            <p class="work-limit-note">Wskaźniki dotyczą procesu i środowiska Debiana 13. Load average to nie procent CPU; wpis w rejestrze zadań nie dowodzi uruchomienia oryginalnego agenta.</p>
-            <p id="diagnostics-feedback" class="form-feedback" role="status" aria-live="polite">Łączenie z diagnostyką…</p>
+            <p id="diagnostics-feedback" class="form-feedback status-line" role="status" aria-live="polite">Łączenie z diagnostyką…</p>
             <div class="diagnostic-kpis" role="group" aria-label="Podstawowe parametry">
-              <div class="diagnostic-kpi"><span>CPU · load 1m</span><strong id="diagnostics-cpu">—</strong><small id="diagnostics-cpu-note">Brak pomiaru</small></div>
-              <div class="diagnostic-kpi"><span>RAM</span><strong id="diagnostics-ram">—</strong><small>Rzeczywista pamięć środowiska</small></div>
-              <div class="diagnostic-kpi"><span>Dysk workspace</span><strong id="diagnostics-disk">—</strong><small>Przestrzeń zajęta / dostępna</small></div>
-              <div class="diagnostic-kpi"><span>Zadania Work</span><strong id="diagnostics-tasks">—</strong><small>Oczekujące · bez samoczynnego wykonywania</small></div>
+              <div class="diagnostic-kpi">
+                <span class="kpi-label"><svg class="icon" aria-hidden="true"><use href="#i-cpu"/></svg>CPU · load 1m</span>
+                <strong id="diagnostics-cpu">—</strong>
+                <progress id="diagnostics-cpu-bar" class="meter" max="100" value="0" aria-label="Obciążenie względem liczby rdzeni"></progress>
+                <small id="diagnostics-cpu-note">Brak pomiaru</small>
+              </div>
+              <div class="diagnostic-kpi">
+                <span class="kpi-label"><svg class="icon" aria-hidden="true"><use href="#i-memory"/></svg>RAM</span>
+                <strong id="diagnostics-ram">—</strong>
+                <progress id="diagnostics-ram-bar" class="meter" max="100" value="0" aria-label="Wykorzystanie pamięci RAM"></progress>
+                <small id="diagnostics-ram-note">Rzeczywista pamięć środowiska</small>
+              </div>
+              <div class="diagnostic-kpi">
+                <span class="kpi-label"><svg class="icon" aria-hidden="true"><use href="#i-disk"/></svg>Dysk workspace</span>
+                <strong id="diagnostics-disk">—</strong>
+                <progress id="diagnostics-disk-bar" class="meter" max="100" value="0" aria-label="Zajętość dysku workspace"></progress>
+                <small id="diagnostics-disk-note">Przestrzeń zajęta / całkowita</small>
+              </div>
+              <div class="diagnostic-kpi">
+                <span class="kpi-label"><svg class="icon" aria-hidden="true"><use href="#i-tasks"/></svg>Zadania Work</span>
+                <strong id="diagnostics-tasks">—</strong>
+                <small id="diagnostics-tasks-note">Oczekujące · bez samoczynnego wykonywania</small>
+              </div>
             </div>
-            <div class="diagnostic-agent-panel">
-              <h3>Praca AI w tle — prawdziwy status</h3>
-              <p id="diagnostics-agent-monitor" class="work-limit-note">Brak potwierdzonej aktywności oryginalnych agentów.</p>
-              <button id="diagnose-alex" class="button button-primary" type="button">Przygotuj diagnozę dla Alexa</button>
-              <p class="work-limit-note">Przycisk przygotowuje zadanie Work do przeglądu. Nie wykonuje automatycznego root, zakupów ani zdalnych poleceń.</p>
+            <div class="diagnostics-grid">
+              <div class="diagnostic-agent-panel card">
+                <h3><svg class="icon" aria-hidden="true"><use href="#i-spark"/></svg>Praca AI w tle — prawdziwy status</h3>
+                <p id="diagnostics-agent-monitor" class="notice notice-neutral">Brak potwierdzonej aktywności oryginalnych agentów.</p>
+                <dl class="kv-list">
+                  <div><dt>Środowisko</dt><dd id="diagnostics-runtime">—</dd></div>
+                  <div><dt>Boot Debian 13</dt><dd id="diagnostics-boot">—</dd></div>
+                  <div><dt>Ostatni pomiar</dt><dd id="diagnostics-observed">—</dd></div>
+                </dl>
+                <button id="diagnose-alex" class="button button-primary" type="button"><svg class="icon" aria-hidden="true"><use href="#i-shield"/></svg>Przygotuj diagnozę dla Alexa</button>
+                <p class="hint">Przycisk przygotowuje zadanie Work do przeglądu. Nie wykonuje automatycznego root, zakupów ani zdalnych poleceń.</p>
+              </div>
+              <section class="diagnostic-event-panel card" aria-labelledby="diagnostics-events-title">
+                <h3 id="diagnostics-events-title">Ostatnie zdarzenia zadań z SQLite</h3>
+                <ul id="diagnostics-events" class="event-list" aria-live="polite"><li class="empty-state">Oczekiwanie na odczyt…</li></ul>
+              </section>
             </div>
-            <section class="diagnostic-event-panel" aria-labelledby="diagnostics-events-title">
-              <h3 id="diagnostics-events-title">Ostatnie zdarzenia zadań z SQLite</h3>
-              <ul id="diagnostics-events" class="event-list" aria-live="polite"><li class="empty-state">Oczekiwanie na odczyt…</li></ul>
-            </section>
+            <p class="hint">Wskaźniki dotyczą procesu i środowiska Debiana 13. Load average to nie procent CPU; wpis w rejestrze zadań nie dowodzi uruchomienia oryginalnego agenta.</p>
           </section>
 
           <section id="terminal-view" class="workspace-view terminal-view" aria-labelledby="terminal-title" hidden>
@@ -308,47 +394,51 @@
                 <p class="eyebrow">POLECENIA OGRANICZONEGO API</p>
                 <h2 id="terminal-title">Terminal</h2>
               </div>
-              <span class="local-badge">pwd · ls · cat</span>
+              <span class="badge">pwd · ls · cat</span>
             </div>
-            <p class="work-limit-note">To nie jest powłoka systemowa. Polecenia są walidowane i obsługiwane przez API.</p>
-            <div class="terminal-live-bar"><span class="runtime-pill" id="terminal-live-status">Gotowy · polecenia tylko do odczytu</span>
-              <button id="terminal-clear" type="button" class="button button-secondary">Wyczyść ekran</button></div>
-            <div id="terminal-output" class="terminal-output" aria-label="Wynik terminala" aria-live="polite">
-              <p class="terminal-hint">Dozwolone są wyłącznie pwd, ls oraz cat &lt;plik&gt; w katalogu roboczym.</p>
-            </div>
-            <form id="terminal-form" class="composer terminal-composer">
-              <label for="terminal-command">Polecenie</label>
-              <input
-                id="terminal-command"
-                name="command"
-                type="text"
-                maxlength="500"
-                autocomplete="off"
-                spellcheck="false"
-                placeholder="np. pwd"
-                required
-              />
-              <div class="form-footer">
-                <p id="terminal-feedback" class="form-feedback" aria-live="polite">
-                  Obsługiwane są tylko pwd, ls i cat &lt;plik&gt; w katalogu roboczym.
-                </p>
-                <button id="terminal-submit" type="submit" class="button button-secondary">Uruchom LIVE</button>
-                <button id="terminal-stop" type="button" class="button button-secondary" hidden>Zatrzymaj odbiór</button>
+            <div class="terminal-window">
+              <div class="terminal-live-bar">
+                <span class="terminal-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+                <span class="runtime-pill terminal-status" id="terminal-live-status">Gotowy · polecenia tylko do odczytu</span>
+                <button id="terminal-clear" type="button" class="button button-ghost button-small">Wyczyść ekran</button>
               </div>
-            </form>
-            <section id="interactive-scripts" class="interactive-script-card" aria-label="Interaktywne skrypty Python">
-              <div class="section-heading"><div><p class="eyebrow">PYTHON · INTERAKTYWNE</p><h3>Skrypty diagnostyczne</h3></div>
-                <span class="local-badge">Izolowane · bez root</span></div>
-              <p class="work-limit-note">Wybierz dozwolony skrypt. Otrzymasz rzeczywiste pytanie z backendu i wpiszesz odpowiedź. Dowolny kod Python pozostaje zablokowany.</p>
+              <div id="terminal-output" class="terminal-output" aria-label="Wynik terminala" aria-live="polite" tabindex="0">
+                <p class="terminal-hint">To nie jest powłoka systemowa. Dozwolone są wyłącznie pwd, ls oraz cat &lt;plik&gt; w katalogu roboczym. Strzałki ↑/↓ przywołują historię.</p>
+              </div>
+              <form id="terminal-form" class="terminal-composer">
+                <label for="terminal-command" class="visually-hidden">Polecenie</label>
+                <span class="terminal-prompt-sign" aria-hidden="true">$</span>
+                <input
+                  id="terminal-command"
+                  name="command"
+                  type="text"
+                  maxlength="500"
+                  autocomplete="off"
+                  autocapitalize="off"
+                  spellcheck="false"
+                  placeholder="np. pwd"
+                  required
+                />
+                <button id="terminal-submit" type="submit" class="button button-primary button-small"><svg class="icon" aria-hidden="true"><use href="#i-play"/></svg>Uruchom LIVE</button>
+                <button id="terminal-stop" type="button" class="button button-danger button-small" hidden>Zatrzymaj odbiór</button>
+              </form>
+            </div>
+            <p id="terminal-feedback" class="form-feedback" aria-live="polite">
+              Obsługiwane są tylko pwd, ls i cat &lt;plik&gt; w katalogu roboczym.
+            </p>
+            <section id="interactive-scripts" class="interactive-script-card card" aria-label="Interaktywne skrypty Python">
+              <div class="card-heading"><div><p class="eyebrow">PYTHON · INTERAKTYWNE</p><h3>Skrypty diagnostyczne</h3></div>
+                <span class="badge">Izolowane · bez root</span></div>
+              <p class="hint">Wybierz dozwolony skrypt. Otrzymasz rzeczywiste pytanie z backendu i wpiszesz odpowiedź. Dowolny kod Python pozostaje zablokowany.</p>
               <form id="script-start-form" class="script-controls">
                 <label for="script-select">Scenariusz</label><select id="script-select" required><option value="">Ładowanie listy…</option></select>
-                <button id="script-start" class="button button-primary" type="submit">Uruchom skrypt</button>
+                <button id="script-start" class="button button-primary" type="submit"><svg class="icon" aria-hidden="true"><use href="#i-play"/></svg>Uruchom skrypt</button>
               </form>
               <div id="script-live-output" class="script-output" role="status" aria-live="polite">Nie uruchomiono żadnego skryptu.</div>
               <form id="script-answer-form" class="script-controls" hidden>
                 <label id="script-prompt" for="script-answer">Odpowiedź skryptu</label>
                 <input id="script-answer" maxlength="240" autocomplete="off" placeholder="Wpisz odpowiedź…" required />
-                <button id="script-answer-submit" type="submit" class="button button-secondary">Odpowiedz</button>
+                <button id="script-answer-submit" type="submit" class="button button-primary">Odpowiedz</button>
                 <button id="script-cancel" type="button" class="button button-secondary">Anuluj</button>
               </form>
             </section>
@@ -360,22 +450,23 @@
                 <p class="eyebrow">DIAGNOSTYKA API</p>
                 <h2 id="settings-title">Status systemu, integracje i wygląd</h2>
               </div>
-              <button id="refresh-status" class="button button-secondary" type="button">Odśwież</button>
+              <button id="refresh-status" class="button button-secondary" type="button"><svg class="icon" aria-hidden="true"><use href="#i-refresh"/></svg>Odśwież</button>
             </div>
-            <section class="design-studio" aria-labelledby="design-studio-title">
-              <div class="design-studio-heading">
+
+            <section class="design-studio card" aria-labelledby="design-studio-title">
+              <div class="card-heading">
                 <div>
                   <p class="eyebrow">ASTYRIA · STUDIO WYGLĄDU</p>
-                  <h3 id="design-studio-title">Motywy interfejsu Debian 13 Trixie</h3>
+                  <h3 id="design-studio-title"><svg class="icon" aria-hidden="true"><use href="#i-palette"/></svg>Motywy interfejsu Debian 13 Trixie</h3>
                 </div>
-                <span class="local-badge">Ustawienia lokalne</span>
+                <span class="badge">Ustawienia lokalne</span>
               </div>
-              <p class="work-limit-note">Domyślny wygląd jest inspirowany pulpitem „Enter the Hyperspace” z SVL_System. Możesz też wybrać inne motywy bez zmiany pracy API. Wygląd zapisuje się tylko w tej przeglądarce; nie zmienia konfiguracji serwera ani innych urządzeń.</p>
+              <p class="hint">Domyślny wygląd jest inspirowany pulpitem „Enter the Hyperspace” z SVL_System. Wygląd zapisuje się tylko w tej przeglądarce; nie zmienia konfiguracji serwera ani innych urządzeń.</p>
               <div class="design-theme-grid" role="group" aria-label="Wybór motywu">
                 <button type="button" class="design-theme-option" data-design-theme="hyperspace" aria-pressed="true">
                   <span class="design-theme-preview theme-hyperspace" aria-hidden="true"><i></i><i></i><i></i></span>
                   <strong>Hyperspace Desktop</strong>
-                  <small>Wybrany pulpit SVL</small>
+                  <small>Cyjan · domyślny pulpit SVL</small>
                 </button>
                 <button type="button" class="design-theme-option" data-design-theme="bastilla-shan" aria-pressed="false">
                   <span class="design-theme-preview theme-bastilla" aria-hidden="true"><i></i><i></i><i></i></span>
@@ -394,93 +485,116 @@
                 </button>
               </div>
               <p id="design-feedback" role="status" aria-live="polite" class="form-feedback">Motyw domyślny: Hyperspace Desktop.</p>
-            </section>
-            <div class="wallpaper-settings">
-              <h3>Motyw Modern OS · tapeta Bastilla</h3>
-              <p class="work-limit-note">Domyślnie wyświetlane jest autorskie tło kosmiczne. Możesz wczytać wybraną tapetę Bastilla Shan z urządzenia — pozostanie w Twojej przeglądarce.</p>
-              <label class="button button-secondary" for="wallpaper-file">Wybierz tapetę</label>
-              <input id="wallpaper-file" type="file" accept="image/png,image/jpeg,image/webp" />
-              <button id="wallpaper-reset" class="button button-secondary" type="button">Przywróć tło domyślne</button>
-              <p id="wallpaper-feedback" class="form-feedback" role="status"></p>
-            </div>
-            <p id="status-error" class="status-error" aria-live="polite"></p>
-            <dl id="runtime-details" class="runtime-grid" aria-live="polite">
-              <div><dt>Aplikacja</dt><dd id="application-status">Ładowanie…</dd></div>
-              <div><dt>System operacyjny</dt><dd id="os-status">Ładowanie…</dd></div>
-              <div><dt>Model AI</dt><dd id="model-status">Ładowanie…</dd></div>
-              <div><dt>Ollama (lokalna)</dt><dd id="ollama-status">Stan Ollamy niezweryfikowany</dd></div>
-              <div><dt>Zadania w pamięci</dt><dd id="task-storage-status">Ładowanie…</dd></div>
-            </dl>
-            <h3 class="settings-subheading">Integracje: Codex, MCP i GPT Actions</h3>
-            <p class="work-limit-note">
-              Statusy pochodzą z API. Dostępny plik integracji nie oznacza aktywnego
-              połączenia z usługą zewnętrzną. Konfiguracja i testy są wymagane.
-            </p>
-            <p id="integration-error" class="status-error" aria-live="polite"></p>
-            <ul id="integration-list" class="agent-grid" aria-label="Stan integracji z Codex MCP GPT Actions">
-              <li class="empty-state">Pobieranie konfiguracji integracji…</li>
-            </ul>
-
-            <div class="mcp-chatgpt-card">
-              <h4>Publiczny serwer HTTPS dla ChatGPT (MCP &amp; GPT Actions)</h4>
-              <p>Bezpośredni publiczny adres HTTPS:</p>
-              <div class="mcp-config-box">
-                <div class="mcp-config-item">
-                  <strong>1. Publiczny adres serwera HTTPS (`/healthz`):</strong>
-                  <code id="mcp-public-healthz">Ładowanie adresu tunelu…</code>
+              <div class="wallpaper-settings">
+                <div>
+                  <h4>Tapeta pulpitu</h4>
+                  <p class="hint">Domyślnie wyświetlane jest autorskie tło kosmiczne. Możesz wczytać własną tapetę z urządzenia — pozostanie tylko w tej karcie przeglądarki.</p>
                 </div>
-                <div class="mcp-config-item">
-                  <strong>2. Uwierzytelniony endpoint MCP (`POST /mcp`):</strong>
-                  <code id="mcp-public-endpoint">Ładowanie…</code>
+                <div class="wallpaper-actions">
+                  <input id="wallpaper-file" class="file-input" type="file" accept="image/png,image/jpeg,image/webp" />
+                  <label class="button button-secondary" for="wallpaper-file"><svg class="icon" aria-hidden="true"><use href="#i-upload"/></svg>Wybierz tapetę</label>
+                  <button id="wallpaper-reset" class="button button-ghost" type="button">Przywróć tło domyślne</button>
                 </div>
-                <div class="mcp-config-item">
-                  <strong>3. Token Bearer (`DEBIAN13_API_TOKEN`):</strong>
-                  <code id="mcp-bearer-token">******** (chroniony w sekretach serwera)</code>
-                </div>
-                <div class="mcp-config-item">
-                  <strong>4. Schemat OpenAPI dla ChatGPT Actions:</strong>
-                  <code id="mcp-openapi-url"><a href="/gpt-actions.openapi.json" target="_blank" rel="noopener">/gpt-actions.openapi.json</a></code>
-                </div>
+                <p id="wallpaper-feedback" class="form-feedback" role="status"></p>
               </div>
-            </div>
+            </section>
 
-            <div class="mcp-chatgpt-card">
-              <h4>ChatGPT + Gemini + MCP Bridge</h4>
-              <p>Dwukierunkowa wymiana komunikatów przez API oraz inspekcja narzędzi MCP w czasie rzeczywistym:</p>
-              <div class="mcp-config-box">
-                <form id="bridge-form" class="composer" style="margin-top: 8px;">
-                  <label for="bridge-provider">Dostawca modelu (wywołanie prawdziwego API)</label>
-                  <select id="bridge-provider" aria-label="Wybierz dostawcę AI" style="display:block; width:100%; margin-bottom:8px; padding:6px; background:#0b1320; color:#fff; border:1px solid var(--border); border-radius:6px;">
-                    <option value="openai">OpenAI API</option>
-                    <option value="gemini">Gemini API</option>
-                  </select>
-                  <label for="bridge-message">Wiadomość testowa do mostka AI</label>
-                  <input id="bridge-message" type="text" placeholder="np. Sprawdź stan diagnostyki systemowej MCP" required style="width: 100%; margin-bottom: 8px; padding: 6px; background: #0b1320; color: #fff; border: 1px solid var(--border); border-radius: 6px;" />
-                  <div style="display: flex; gap: 8px; align-items: center;">
-                    <button type="submit" class="button button-primary" style="padding: 6px 12px; font-size: 12px;">Wyślij przez Bridge</button>
-                    <button type="button" id="bridge-terminate" class="button button-secondary" style="padding: 6px 12px; font-size: 12px;">Resetuj sesję</button>
+            <section class="card" aria-labelledby="runtime-title">
+              <h3 id="runtime-title" class="card-title-lg"><svg class="icon" aria-hidden="true"><use href="#i-pulse"/></svg>Stan runtime</h3>
+              <p id="status-error" class="status-error" aria-live="polite"></p>
+              <dl id="runtime-details" class="runtime-grid" aria-live="polite">
+                <div><dt>Aplikacja</dt><dd id="application-status">Ładowanie…</dd></div>
+                <div><dt>System operacyjny</dt><dd id="os-status">Ładowanie…</dd></div>
+                <div><dt>Model AI</dt><dd id="model-status">Ładowanie…</dd></div>
+                <div><dt>Ollama (lokalna)</dt><dd id="ollama-status">Stan Ollamy niezweryfikowany</dd></div>
+                <div><dt>Zadania w pamięci</dt><dd id="task-storage-status">Ładowanie…</dd></div>
+              </dl>
+            </section>
+
+            <section class="card" aria-labelledby="integrations-title">
+              <h3 id="integrations-title" class="card-title-lg"><svg class="icon" aria-hidden="true"><use href="#i-plug"/></svg>Integracje: Codex, MCP i GPT Actions</h3>
+              <p class="hint">
+                Statusy pochodzą z API. Dostępny plik integracji nie oznacza aktywnego
+                połączenia z usługą zewnętrzną. Konfiguracja i testy są wymagane.
+              </p>
+              <p id="integration-error" class="status-error" aria-live="polite"></p>
+              <ul id="integration-list" class="agent-grid" aria-label="Stan integracji z Codex MCP GPT Actions">
+                <li class="empty-state">Pobieranie konfiguracji integracji…</li>
+              </ul>
+            </section>
+
+            <div class="settings-columns">
+              <section class="mcp-chatgpt-card card">
+                <h4>Serwer HTTPS dla ChatGPT (MCP &amp; GPT Actions)</h4>
+                <p class="hint">Adresy względem bieżącego serwera bramy:</p>
+                <div class="mcp-config-box">
+                  <div class="mcp-config-item">
+                    <strong>1. Kontrola zdrowia (<code>/healthz</code>)</strong>
+                    <code id="mcp-public-healthz">Ładowanie adresu tunelu…</code>
+                  </div>
+                  <div class="mcp-config-item">
+                    <strong>2. Uwierzytelniony endpoint MCP (<code>POST /mcp</code>)</strong>
+                    <code id="mcp-public-endpoint">Ładowanie…</code>
+                  </div>
+                  <div class="mcp-config-item">
+                    <strong>3. Token Bearer (<code>DEBIAN13_API_TOKEN</code>)</strong>
+                    <code id="mcp-bearer-token">******** (chroniony w sekretach serwera)</code>
+                  </div>
+                  <div class="mcp-config-item">
+                    <strong>4. Schemat OpenAPI dla ChatGPT Actions</strong>
+                    <code id="mcp-openapi-url">debian13/system/gpt-actions.openapi.json (w repozytorium)</code>
+                  </div>
+                </div>
+              </section>
+
+              <section class="mcp-chatgpt-card card">
+                <h4>ChatGPT + Gemini + MCP Bridge</h4>
+                <p class="hint">Dwukierunkowa wymiana komunikatów przez API oraz inspekcja narzędzi MCP w czasie rzeczywistym.</p>
+                <form id="bridge-form" class="bridge-form">
+                  <div class="field">
+                    <label for="bridge-provider">Dostawca modelu (wywołanie prawdziwego API)</label>
+                    <select id="bridge-provider" aria-label="Wybierz dostawcę AI">
+                      <option value="openai">OpenAI API</option>
+                      <option value="gemini">Gemini API</option>
+                    </select>
+                  </div>
+                  <div class="field">
+                    <label for="bridge-message">Wiadomość testowa do mostka AI</label>
+                    <input id="bridge-message" type="text" placeholder="np. Sprawdź stan diagnostyki systemowej MCP" required />
+                  </div>
+                  <div class="button-row">
+                    <button type="submit" class="button button-primary button-small"><svg class="icon" aria-hidden="true"><use href="#i-send"/></svg>Wyślij przez Bridge</button>
+                    <button type="button" id="bridge-terminate" class="button button-ghost button-small">Resetuj sesję</button>
                   </div>
                 </form>
-                <div id="bridge-output" style="margin-top: 10px; font-size: 11.5px; background: rgba(0,0,0,0.4); padding: 8px; border-radius: 6px; color: #38bdf8; min-height: 40px; white-space: pre-wrap;">Brak aktywnych żądań bridge.</div>
-              </div>
+                <div id="bridge-output" class="bridge-output" role="status" aria-live="polite">Brak aktywnych żądań bridge.</div>
+              </section>
             </div>
-            <h3 class="settings-subheading">Oryginalni agenci AI właściciela</h3>
-            <p class="work-limit-note">
-              Alex, Aria, Astyria i Aurelius pochodzą z istniejącej konfiguracji GitHub.
-              Dostępny profil ani rejestr zadań nie oznaczają działającego modelu AI.
-            </p>
-            <p id="original-agent-error" class="status-error" aria-live="polite"></p>
-            <ul id="original-agent-list" class="agent-grid" aria-label="Połączenie z oryginalnymi agentami">
-              <li class="empty-state">Sprawdzanie połączenia ze źródłem agentów…</li>
-            </ul>
-            <h3 class="settings-subheading">Profile agentów i stan workerów</h3>
-            <p id="agent-error" class="status-error" aria-live="polite"></p>
-            <p id="agent-count" class="muted-count">Ładowanie profili…</p>
-            <ul id="agent-list" class="agent-grid" aria-label="Statusy profili i workerów"></ul>
-            <p class="work-limit-note">
-              Profile są konfiguracją, nie uruchomionymi procesami. Historia API jest przechowywana
-              w pamięci backendu i wygasa po bezczynności; lista po lewej dotyczy tej przeglądarki.
-            </p>
+
+            <section class="card" aria-labelledby="original-agents-title">
+              <h3 id="original-agents-title" class="card-title-lg"><svg class="icon" aria-hidden="true"><use href="#i-users"/></svg>Oryginalni agenci AI właściciela</h3>
+              <p class="hint">
+                Alex, Aria, Astyria i Aurelius pochodzą z istniejącej konfiguracji GitHub.
+                Dostępny profil ani rejestr zadań nie oznaczają działającego modelu AI.
+              </p>
+              <p id="original-agent-error" class="status-error" aria-live="polite"></p>
+              <ul id="original-agent-list" class="agent-grid" aria-label="Połączenie z oryginalnymi agentami">
+                <li class="empty-state">Sprawdzanie połączenia ze źródłem agentów…</li>
+              </ul>
+            </section>
+
+            <section class="card" aria-labelledby="profiles-title">
+              <div class="card-heading">
+                <h3 id="profiles-title" class="card-title-lg">Profile agentów i stan workerów</h3>
+                <p id="agent-count" class="muted-count">Ładowanie profili…</p>
+              </div>
+              <p id="agent-error" class="status-error" aria-live="polite"></p>
+              <ul id="agent-list" class="agent-grid" aria-label="Statusy profili i workerów"></ul>
+              <p class="hint">
+                Profile są konfiguracją, nie uruchomionymi procesami. Historia API jest przechowywana
+                w pamięci backendu i wygasa po bezczynności; lista po lewej dotyczy tej przeglądarki.
+              </p>
+            </section>
           </section>
 
           <footer class="footer">
