@@ -269,5 +269,12 @@ test('proxy rejects API query parameters instead of silently dropping them', asy
   const response = await fetch(`${base}/api/v1/status?unexpected=1`);
   assert.equal(response.status, 400);
   assert.deepEqual(await response.json(), { error: 'Parametry URL API nie są obsługiwane.' });
-  assert.equal(upstream.requests.length, 0, 'query-bearing requests must not reach upstream');
+  const post = await fetch(`${base}/api/v1/chat?unexpected=1`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message: 'must not be forwarded' }),
+  });
+  assert.equal(post.status, 400);
+  assert.deepEqual(await post.json(), { error: 'Parametry URL API nie są obsługiwane.' });
+  assert.equal(upstream.requests.length, 0, 'GET and POST query-bearing requests must not reach upstream');
 });
