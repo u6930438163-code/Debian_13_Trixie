@@ -260,6 +260,7 @@ test('original Alex capability and explicit operator handoff stay behind tokeniz
     body: JSON.stringify({force: true, purchaseAuthorized: true}),
   });
   assert.equal(blocked.status, 400);
+  assert.deepEqual(await blocked.json(), { error: 'Przekazanie zadania nie przyjmuje treści.' });
   assert.equal(upstream.requests.length, 2, 'invalid dispatch must not reach API');
 });
 
