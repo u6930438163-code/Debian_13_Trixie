@@ -2819,3 +2819,44 @@ li.empty-state {
     border: 1px solid CanvasText;
   }
 }
+
+/* ---------- Independent agents: worker state & task results ---------- */
+.agent-card[data-worker="running"] .agent-state-dot {
+  background: var(--success);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--success) 18%, transparent), 0 0 10px color-mix(in srgb, var(--success) 55%, transparent);
+}
+
+.task-running::before {
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+.task-result {
+  grid-column: 1 / -1;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.task-failed ~ .task-result,
+.task-item:has(.task-failed) .task-result {
+  border-color: color-mix(in srgb, var(--danger) 35%, transparent);
+}
+
+.task-result summary {
+  padding: 8px 12px;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.task-result p {
+  max-height: 320px;
+  margin: 0;
+  padding: 0 12px 12px;
+  overflow: auto;
+  font-size: 13.5px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

@@ -269,11 +269,12 @@ function renderAgentProfiles(list, agents = getInitialAgentStatuses()) {
 
     const privilege = document.createElement('p');
     privilege.className = 'agent-privilege';
-    privilege.textContent = 'Brak narzuconej specjalizacji · uprawnienia ustala środowisko';
+    privilege.textContent = 'Bez roli, persony i skryptu · własna pamięć rozmów · uprawnienia ustala środowisko';
     const labels = agentStatusLabel(agent);
     const profile = document.createElement('p');
     profile.className = 'agent-state';
-    profile.textContent = labels.profile;
+    profile.textContent = agent.modelConfigured === undefined ? labels.profile : agentIndependenceLabel(agent);
+    item.dataset.worker = agent.worker === 'running' ? 'running' : 'idle';
     const worker = document.createElement('p');
     worker.className = 'worker-state';
     worker.textContent = labels.worker;
@@ -470,7 +471,7 @@ function renderTasks(tasks) {
     detail.append(taskTitle, taskMeta);
     const status = document.createElement('span');
     status.className = `task-state task-${task.status}`;
-    status.textContent = task.status;
+    status.textContent = taskStatusLabel(task.status);
     const actions = document.createElement('span');
     actions.className = 'task-actions';
     if (typeof task.id === 'string' && SESSION_ID_PATTERN.test(task.id)) {
@@ -508,6 +509,19 @@ function renderTasks(tasks) {
       }
     }
     item.append(detail, status, actions);
+    if ((task.status === 'completed' || task.status === 'failed') && typeof task.result === 'string') {
+      const result = document.createElement('details');
+      result.className = 'task-result';
+      result.open = task.status === 'completed';
+      const summary = document.createElement('summary');
+      summary.textContent = task.status === 'completed'
+        ? `Odpowiedź agenta ${agentName}${task.result_model ? ' · ' + task.result_model : ''}`
+        : `Model agenta ${agentName} nie odpowiedział`;
+      const body = document.createElement('p');
+      body.textContent = task.status === 'completed' ? task.result : 'Kod błędu: ' + task.result;
+      result.append(summary, body);
+      item.append(result);
+    }
     fragment.append(item);
   }
   if (!tasks.length) {
@@ -517,7 +531,10 @@ function renderTasks(tasks) {
     fragment.append(empty);
   }
   list.replaceChildren(fragment);
-  setText('tasks-count', `${tasks.length} zadań · zapis SQLite · brak potwierdzonej pracy workerów`);
+  const working = tasks.filter((task) => task.status === 'running').length;
+  const done = tasks.filter((task) => task.status === 'completed').length;
+  setText('tasks-count', `${tasks.length} zadań · w toku: ${working} · wykonane przez agentów: ${done}`);
+  scheduleWorkPolling(tasks);
   setText('tasks-error', '');
 }
 
@@ -607,6 +624,8 @@ let alexDispatchSupported = false;
 let cachedWorkTasks = [];
 let workRefreshPending = false;
 let activeSessionId = '';
+// Agent that owns the active conversation; each agent keeps a separate memory.
+let activeSessionAgent = '';
 let activeChatController = null;
 let activeChatTaskId = '';
 let activeChatCancelMessage = '';
@@ -663,8 +682,8 @@ async function loadOriginalAgents() {
       const id = String(agent.id || agent.name || '').toLowerCase();
       const statusElement = document.querySelector(`[data-tile-status="${id}"]`);
       if (statusElement) statusElement.textContent = agent.workerVerified === true
-        ? 'Proces zweryfikowany' : response.registryReachable
-          ? 'Rejestr źródłowy' : 'Niepodłączony';
+        ? 'Źródło AI Studio: zweryfikowane' : response.registryReachable
+          ? 'Źródło AI Studio: rejestr' : 'Źródło AI Studio: niepodłączone';
     }
   } catch (error) {
     list.replaceChildren();
@@ -672,6 +691,21 @@ async function loadOriginalAgents() {
       element.textContent = 'API niedostępne';
     }
     setText('original-agent-error', error.message);
+  }
+}
+
+// Facts reported by the API: no role, own model, own memory, own worker.
+export function agentIndependenceLabel(agent) {
+  if (!agent?.modelConfigured) return 'Bez roli · brak modelu';
+  const model = agent.dedicatedModel ? `własny model ${agent.model}` : `model ${agent.model}`;
+  return `Bez roli · ${model}${agent.worker === 'running' ? ' · pracuje sam' : ''}`;
+}
+
+function setTileModel(id, text) {
+  const element = document.querySelector(`[data-tile-model="${CSS.escape(String(id))}"]`);
+  if (element) {
+    element.textContent = text;
+    element.title = text;
   }
 }
 
@@ -684,6 +718,9 @@ async function loadAgents() {
     if (!Array.isArray(payload.agents)) throw new ApiError('Nieprawidłowy format listy profili.');
     const agents = payload.agents;
     renderAgentProfiles(document.getElementById('agent-list'), agents);
+    for (const agent of agents) {
+      setTileModel(agent.id, agentIndependenceLabel(agent));
+    }
     const workers = agents.filter(({ worker }) => worker === 'running').length;
     setText('agent-count', `${agents.length} profili · ${workers} workerów uruchomionych`);
   } catch (error) {
@@ -860,7 +897,7 @@ async function refreshTaskStatus(taskId, button) {
     const item = button.closest('[data-task-id]');
     const status = item?.querySelector('.task-state');
     if (status) {
-      status.textContent = payload.task.status;
+      status.textContent = taskStatusLabel(payload.task.status);
       status.className = `task-state task-${payload.task.status}`;
     }
     if (payload.alexSubmission) {
@@ -911,6 +948,31 @@ function setMeter(id, value) {
   meter.dataset.level = value !== null && value >= 85 ? 'high' : 'normal';
 }
 
+const TASK_STATUS_LABELS = Object.freeze({
+  queued: 'w kolejce',
+  running: 'agent pracuje',
+  completed: 'wykonane przez agenta',
+  failed: 'błąd modelu',
+  cancelled: 'anulowane',
+});
+
+export function taskStatusLabel(status) {
+  return TASK_STATUS_LABELS[status] ?? String(status ?? 'nieznany');
+}
+
+// Refresh Work on its own while agents are busy (bounded to respect API rate limits).
+let workPollTimer = null;
+function scheduleWorkPolling(tasks) {
+  clearTimeout(workPollTimer);
+  workPollTimer = null;
+  if (typeof document === 'undefined') return;
+  if (!tasks.some((task) => task.status === 'queued' || task.status === 'running')) return;
+  workPollTimer = setTimeout(() => {
+    if (document.documentElement.dataset.activeView === 'work' && !document.hidden) void refreshWork();
+    else scheduleWorkPolling(cachedWorkTasks);
+  }, 15000);
+}
+
 // Pure formatter so the honest wording of each measurement is unit-testable.
 export function summarizeDiagnostics(snapshot) {
   const cpu = snapshot?.cpu ?? {};
@@ -939,8 +1001,24 @@ export function summarizeDiagnostics(snapshot) {
       : `${Number(disk.usedGiB).toFixed(1)} / ${Number(disk.totalGiB).toFixed(1)} GiB zajęte`,
     diskPercent,
     tasks: String(Number(ledger.queued) || 0),
-    tasksNote: `Oczekujące · anulowane: ${Number(ledger.cancelled) || 0} · bez samoczynnego wykonywania`,
+    tasksNote: `Oczekujące · w toku: ${Number(ledger.running) || 0} · wykonane przez agentów: `
+      + `${Number(ledger.completed) || 0} · błędy: ${Number(ledger.failed) || 0}`,
   };
+}
+
+// Describe only what the API measured: the worker counts real model answers.
+export function describeAgentWorker(snapshot) {
+  const worker = snapshot?.agentWorker ?? {};
+  const active = Number(snapshot?.taskLedger?.automaticallyExecutingWorkers) || 0;
+  if (worker.enabled !== true) {
+    return 'Worker agentów wyłączony (DEBIAN13_AGENT_WORKER=0). Zadania czekają na przegląd.';
+  }
+  if (!active) {
+    return 'Worker agentów włączony, ale żaden agent nie ma skonfigurowanego modelu — zadania czekają w kolejce.';
+  }
+  const busy = worker.currentTask ? ' · teraz pracuje nad zadaniem' : '';
+  return `Agenci pracują samodzielnie (${active} z modelem)${busy}. `
+    + `Wykonane: ${Number(worker.processed) || 0} · błędy modelu: ${Number(worker.failed) || 0}.`;
 }
 
 function renderDiagnosticEvents(events) {
@@ -971,6 +1049,21 @@ function renderDiagnosticEvents(events) {
 }
 
 let diagnosticsPending = false;
+let lastDiagnosticsSnapshot = null;
+
+// The measured values ARE the task; no role or instruction is attached.
+export function diagnosisDescription(snapshot) {
+  const view = summarizeDiagnostics(snapshot);
+  return [
+    'Pomiar runtime Debian 13 z API:',
+    `CPU load 1m: ${view.cpu} (${view.cpuNote})`,
+    `RAM: ${view.ram} (${view.ramNote})`,
+    `Dysk workspace: ${view.disk} (${view.diskNote})`,
+    `Zadania Work w kolejce: ${view.tasks}`,
+    `Środowisko: ${snapshot?.runtime?.distribution ?? 'nieznane'}`,
+    'Co z tego wynika i co warto zrobić?',
+  ].join('\n').slice(0, 2000);
+}
 async function loadDiagnostics() {
   if (diagnosticsPending) return false;
   diagnosticsPending = true;
@@ -979,6 +1072,7 @@ async function loadDiagnostics() {
   setText('diagnostics-feedback', 'Pobieranie pomiarów z API…');
   try {
     const snapshot = await api.getDiagnostics();
+    lastDiagnosticsSnapshot = snapshot;
     const view = summarizeDiagnostics(snapshot);
     setText('diagnostics-cpu', view.cpu);
     setText('diagnostics-cpu-note', view.cpuNote);
@@ -993,12 +1087,7 @@ async function loadDiagnostics() {
     setMeter('diagnostics-disk-bar', view.diskPercent);
     setText('diagnostics-tasks', view.tasks);
     setText('diagnostics-tasks-note', view.tasksNote);
-    const monitor = snapshot?.agentMonitor ?? {};
-    setText('diagnostics-agent-monitor', monitor.executionVerified === true
-      ? `Monitor potwierdził pracę ${Number(monitor.workersVerified) || 0} workerów.`
-      : monitor.enabled
-        ? `Monitor aktywny · rejestr ${monitor.registryReachable ? 'dostępny' : 'niedostępny'} · praca AI niepotwierdzona.`
-        : 'Monitor pracy w tle wyłączony. Brak potwierdzonej aktywności oryginalnych agentów.');
+    setText('diagnostics-agent-monitor', describeAgentWorker(snapshot));
     setText('diagnostics-runtime', snapshot?.runtime?.python
       ? `Python ${snapshot.runtime.python} · ${snapshot.runtime.distribution ?? ''}`
       : '—');
@@ -1029,14 +1118,14 @@ async function prepareAlexDiagnosis(event) {
       agent: 'alex',
       kind: 'audit',
       title: 'Diagnoza runtime Debian 13',
-      description: 'Przejrzyj bieżący pomiar z widoku Diagnostyka (CPU load, RAM, dysk, zdarzenia zadań) '
-        + 'i zaproponuj działania. Zadanie do przeglądu operatora — bez root, zakupów i zdalnych poleceń.',
+      description: diagnosisDescription(lastDiagnosticsSnapshot),
     });
     if (!result.task?.id || result.executionStarted !== false) {
       throw new ApiError('API nie potwierdziło bezpiecznej rejestracji zadania.');
     }
     await Promise.all([refreshWork(), loadDiagnostics()]);
-    setText('diagnostics-feedback', 'Zadanie diagnozy zapisane w Work. Agent AI NIE został uruchomiony.');
+    setText('diagnostics-feedback', 'Zadanie diagnozy przekazane Alexowi w Work. Jeśli Alex ma model, '
+      + 'przejmie je samodzielnie; odpowiedź pojawi się w kolejce.');
   } catch (error) {
     setText('diagnostics-feedback', 'Nie zapisano zadania: ' + error.message);
   } finally {
@@ -1087,6 +1176,12 @@ async function loadHistory(sessionId) {
     const payload = await api.getMessages(sessionId);
     if (!Array.isArray(payload.messages)) throw new ApiError('Nieprawidłowy format historii rozmowy.');
     activeSessionId = sessionId;
+    activeSessionAgent = typeof payload.agent === 'string' ? payload.agent : '';
+    const owner = document.getElementById('chat-agent');
+    if (owner && activeSessionAgent && owner.value !== activeSessionAgent) {
+      owner.value = activeSessionAgent;
+      syncAgentChannel();
+    }
     try {
       sessionStorage.setItem(SESSION_KEY, sessionId);
     } catch {
@@ -1175,6 +1270,19 @@ function setCollapsedSidebar(collapsed) {
   button.title = collapsed ? 'Rozwiń panel boczny' : 'Zwiń panel boczny';
 }
 
+// Switching agents never carries one agent's conversation into another's context.
+function separateAgentConversation() {
+  const selected = document.getElementById('chat-agent')?.value;
+  if (!activeSessionId || !activeSessionAgent || selected === activeSessionAgent) return;
+  activeSessionId = '';
+  activeSessionAgent = '';
+  try { sessionStorage.removeItem(SESSION_KEY); } catch { /* optional storage */ }
+  renderHistory();
+  renderTranscriptMessages([]);
+  const name = AGENT_PROFILES.find((profile) => profile.id === selected)?.name ?? selected;
+  setText('chat-feedback', `Nowa rozmowa z ${name}. Każdy agent ma własną, oddzielną pamięć rozmów.`);
+}
+
 function syncAgentChannel() {
   const select = document.getElementById('chat-agent');
   const channel = select?.value || 'aria';
@@ -1203,12 +1311,15 @@ function bindNavigation() {
   const media = window.matchMedia('(max-width: 760px)');
   document.querySelectorAll('[data-agent-channel]').forEach(tile => tile.addEventListener('click', () => {
     const select = document.getElementById('chat-agent');
-    if (select) { select.value = tile.dataset.agentChannel; syncAgentChannel(); }
+    if (select) { select.value = tile.dataset.agentChannel; syncAgentChannel(); separateAgentConversation(); }
     showView('chat');
     setMobileSidebar(false);
     document.getElementById('chat-message')?.focus();
   }));
-  document.getElementById('chat-agent')?.addEventListener('change', syncAgentChannel);
+  document.getElementById('chat-agent')?.addEventListener('change', () => {
+    syncAgentChannel();
+    separateAgentConversation();
+  });
   document.getElementById('new-chat-inline')?.addEventListener('click', () =>
     document.getElementById('new-chat')?.click());
   syncAgentChannel();
@@ -1233,6 +1344,7 @@ function bindNavigation() {
   });
   document.getElementById('new-chat')?.addEventListener('click', () => {
     activeSessionId = '';
+    activeSessionAgent = '';
     try {
       sessionStorage.removeItem(SESSION_KEY);
     } catch {
@@ -1473,6 +1585,7 @@ function bindChatForm() {
       if (receivedCancelled) {
         if (responseSessionId && SESSION_ID_PATTERN.test(responseSessionId)) {
           activeSessionId = responseSessionId;
+          activeSessionAgent = agent.value;
           recordHistory(responseSessionId, userMessage);
         }
         feedback.textContent = 'API potwierdziło anulowanie zadania.';
@@ -1482,13 +1595,14 @@ function bindChatForm() {
       if (responseBubble) responseBubble.heading.textContent = `${responseAgent} · ${responseSource || 'API'}`;
       if (responseSessionId && SESSION_ID_PATTERN.test(responseSessionId)) {
         activeSessionId = responseSessionId;
+        activeSessionAgent = agent.value;
         recordHistory(responseSessionId, userMessage);
       }
       message.value = '';
       feedback.textContent = responseSource === 'ollama'
-        ? 'Odpowiedź lokalnej Ollamy; API nie zapisuje historii sesji.'
+        ? 'Odpowiedź lokalnej Ollamy · agent pamięta tę rozmowę (w pamięci procesu API).'
         : responseSource === 'model_provider'
-          ? 'Odpowiedź podłączonego dostawcy AI; brak zapisu historii sesji.'
+          ? 'Odpowiedź modelu agenta · agent pamięta tę rozmowę (w pamięci procesu API).'
           : 'Odpowiedź API.';
     } catch (error) {
       if (error?.name === 'AbortError') {
@@ -1566,7 +1680,8 @@ function bindWorkCreateForm() {
       document.getElementById('work-task-title').value = '';
       document.getElementById('work-task-description').value = '';
       await refreshWork();
-      setText('work-create-feedback', 'Zadanie zapisane. Agent AI NIE został uruchomiony; oczekuje na przegląd operatora.');
+      setText('work-create-feedback', 'Zadanie zapisane. Przypisany agent przejmie je samodzielnie, '
+        + 'jeśli ma skonfigurowany model; w przeciwnym razie czeka w kolejce.');
     } catch (error) {
       setText('work-create-feedback', error.message);
     } finally {

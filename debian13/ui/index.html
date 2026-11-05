@@ -203,10 +203,10 @@
               </div>
             </div>
             <div id="agent-tiles" class="agent-tiles" role="group" aria-label="Oryginalni agenci AI">
-              <button type="button" class="agent-tile" data-agent-channel="aria" aria-pressed="true"><span class="agent-avatar avatar-aria" aria-hidden="true">AR</span><span class="agent-tile-text"><strong>Aria</strong><small>Bez specjalizacji</small><em data-tile-status="aria">Sprawdzanie…</em></span></button>
-              <button type="button" class="agent-tile" data-agent-channel="alex" aria-pressed="false"><span class="agent-avatar avatar-alex" aria-hidden="true">AL</span><span class="agent-tile-text"><strong>Alex</strong><small>Bez specjalizacji</small><em data-tile-status="alex">Sprawdzanie…</em></span></button>
-              <button type="button" class="agent-tile" data-agent-channel="astyria" aria-pressed="false"><span class="agent-avatar avatar-astyria" aria-hidden="true">AS</span><span class="agent-tile-text"><strong>Astyria</strong><small>Bez specjalizacji</small><em data-tile-status="astyria">Sprawdzanie…</em></span></button>
-              <button type="button" class="agent-tile" data-agent-channel="aurelius" aria-pressed="false"><span class="agent-avatar avatar-aurelius" aria-hidden="true">AU</span><span class="agent-tile-text"><strong>Aurelius</strong><small>Bez specjalizacji</small><em data-tile-status="aurelius">Sprawdzanie…</em></span></button>
+              <button type="button" class="agent-tile" data-agent-channel="aria" aria-pressed="true"><span class="agent-avatar avatar-aria" aria-hidden="true">AR</span><span class="agent-tile-text"><strong>Aria</strong><small data-tile-model="aria">Bez roli · model sprawdzany…</small><em data-tile-status="aria">Sprawdzanie…</em></span></button>
+              <button type="button" class="agent-tile" data-agent-channel="alex" aria-pressed="false"><span class="agent-avatar avatar-alex" aria-hidden="true">AL</span><span class="agent-tile-text"><strong>Alex</strong><small data-tile-model="alex">Bez roli · model sprawdzany…</small><em data-tile-status="alex">Sprawdzanie…</em></span></button>
+              <button type="button" class="agent-tile" data-agent-channel="astyria" aria-pressed="false"><span class="agent-avatar avatar-astyria" aria-hidden="true">AS</span><span class="agent-tile-text"><strong>Astyria</strong><small data-tile-model="astyria">Bez roli · model sprawdzany…</small><em data-tile-status="astyria">Sprawdzanie…</em></span></button>
+              <button type="button" class="agent-tile" data-agent-channel="aurelius" aria-pressed="false"><span class="agent-avatar avatar-aurelius" aria-hidden="true">AU</span><span class="agent-tile-text"><strong>Aurelius</strong><small data-tile-model="aurelius">Bez roli · model sprawdzany…</small><em data-tile-status="aurelius">Sprawdzanie…</em></span></button>
             </div>
             <div class="channel-notice" id="group-channel-notice" hidden>„Wszyscy” wymaga rzeczywistej bramy wiadomości między oryginalnymi agentami. Wysyłanie jest chwilowo zablokowane, żeby nie udawać czatu grupowego.</div>
             <div id="chat-transcript" class="transcript" aria-label="Rozmowa" aria-live="polite" aria-relevant="additions text" tabindex="0">
@@ -296,9 +296,10 @@
                 </form>
                 <p class="notice">
                   <svg class="icon" aria-hidden="true"><use href="#i-info"/></svg>
-                  <span>Zadania są trwale zapisywane w API do przeglądu. Wysłanie zadania
-                  NIE uruchamia agenta AI, nie wykonuje kodu i nie zatwierdza zakupów.
-                  Każdy etap wykonania wymaga osobnego, rzeczywiście działającego workera.</span>
+                  <span>Zadanie trafia do przypisanego agenta. Jeśli agent ma skonfigurowany model,
+                  przejmuje je samodzielnie w tle — bez roli i bez skryptu, tylko z treścią zadania —
+                  a jego odpowiedź pojawia się w kolejce. Agent nie wykonuje poleceń powłoki,
+                  nie zmienia plików, nie dostaje roota i nie robi zakupów.</span>
                 </p>
                 <p id="alex-dispatch-state" class="notice notice-neutral" role="status" aria-live="polite">
                   Oryginalny Alex: oczekuje na sprawdzenie możliwości wysyłania zadań.
@@ -365,7 +366,7 @@
               <div class="diagnostic-kpi">
                 <span class="kpi-label"><svg class="icon" aria-hidden="true"><use href="#i-tasks"/></svg>Zadania Work</span>
                 <strong id="diagnostics-tasks">—</strong>
-                <small id="diagnostics-tasks-note">Oczekujące · bez samoczynnego wykonywania</small>
+                <small id="diagnostics-tasks-note">Oczekujące w kolejce agentów</small>
               </div>
             </div>
             <div class="diagnostics-grid">

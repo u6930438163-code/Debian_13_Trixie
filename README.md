@@ -60,6 +60,34 @@ z Docker Compose + Ollama poprzez `bash debian13/start-ai-session.sh`;
 domyślny model Vision 11B wymaga znaczącej pamięci. Szczegóły w
 [`debian13/README.md`](debian13/README.md).
 
+## Niezależni agenci: bez ról, bez skryptów
+
+Aria, Astyria, Aurelius i Alex działają niezależnie, zarówno na czacie, jak i w systemie:
+
+- **Brak roli i skryptu.** Do modelu nie trafia żaden prompt systemowy, persona,
+  specjalizacja, hierarchia ani gotowa odpowiedź. Model dostaje wyłącznie Twoje
+  wiadomości i własne poprzednie odpowiedzi w tej samej rozmowie (sprawdzają to testy).
+- **Własny model.** Każdy agent może działać na innym dostawcy lub modelu.
+  Nieustawione pole agenta przyjmuje wartość wspólną `MODEL_*`:
+  ```bash
+  export MODEL_ALEX_NAME="model-alexa"            # tylko inny model, ten sam dostawca
+  export MODEL_ARIA_CHAT_URL="https://INNY-DOSTAWCA/v1/chat/completions"
+  export MODEL_ARIA_API_KEY="SEKRET_W_SEKRETACH"
+  export MODEL_ARIA_NAME="model-arii"
+  ```
+- **Własna pamięć.** Rozmowa należy do jednego agenta; inny agent nigdy nie widzi
+  jej treści (API zwraca `409 session_agent_mismatch`). Pamięć jest w procesie API
+  (nie na dysku), do 40 wiadomości na rozmowę, wygasa po 2 h bezczynności.
+- **Samodzielna praca.** Worker w tle przekazuje każde zadanie Work przypisanemu
+  agentowi — tylko treść zadania, bez instrukcji — i zapisuje jego odpowiedź
+  (`completed`) albo kod błędu modelu (`failed`). Agent bez skonfigurowanego modelu
+  nie dostaje zadań, więc nic nie jest oznaczane jako wykonane bez prawdziwej
+  odpowiedzi. Wyłączenie: `DEBIAN13_AGENT_WORKER=0`.
+
+**Granica bezpieczeństwa:** wynikiem pracy agenta jest tekst do przeglądu. Agent
+nie wykonuje poleceń powłoki, nie zmienia plików, nie dostaje roota, nie wywołuje
+GitHub i nie robi zakupów.
+
 ## Oryginalni agenci AI właściciela
 
 Konfiguracje źródłowych agentów **Alex, Aria, Astyria, Aurelius** w

@@ -67,10 +67,17 @@ def snapshot(server) -> dict:
         "disk": _disk(server.workspace),
         "taskLedger": {
             "queued": sum(t["status"] == "queued" for t in tasks),
+            "running": sum(t["status"] == "running" for t in tasks),
+            "completed": sum(t["status"] == "completed" for t in tasks),
+            "failed": sum(t["status"] == "failed" for t in tasks),
             "cancelled": sum(t["status"] == "cancelled" for t in tasks),
             "storedInSQLite": True,
-            "automaticallyExecutingWorkers": 0,
+            # Agents whose own model the worker can use right now (0 = queue only).
+            "automaticallyExecutingWorkers": len(server.worker_agents())
+            if getattr(server, "agent_worker", None) is not None else 0,
         },
+        "agentWorker": server.agent_worker.snapshot()
+        if getattr(server, "agent_worker", None) is not None else {"enabled": False},
         "recentEvents": [
             {"type": str(e["type"])[:64], "agent": str(e["agent"])[:32],
              "taskId": str(e["task_id"])[:64], "at": str(e["at"])[:40]}

@@ -168,3 +168,34 @@ test('diagnostics view is wired to the real API and formats honest measurements'
   assert.match(LOCAL_HELP_TEXT, /\/cli <polecenie>/);
   assert.match(app, /\^\\\/help\\s\*\$/);
 });
+
+test('GUI reports agent independence facts from the API without inventing work', async () => {
+  const { agentIndependenceLabel, describeAgentWorker, taskStatusLabel, diagnosisDescription } = await import('./app.mjs');
+  assert.equal(agentIndependenceLabel({ modelConfigured: false }), 'Bez roli · brak modelu');
+  assert.equal(agentIndependenceLabel({ modelConfigured: true, dedicatedModel: true, model: 'm-alex', worker: 'running' }),
+    'Bez roli · własny model m-alex · pracuje sam');
+  assert.equal(agentIndependenceLabel({ modelConfigured: true, dedicatedModel: false, model: 'shared', worker: 'not_running' }),
+    'Bez roli · model shared');
+  assert.match(describeAgentWorker({ agentWorker: { enabled: false } }), /wyłączony/);
+  assert.match(describeAgentWorker({ agentWorker: { enabled: true }, taskLedger: { automaticallyExecutingWorkers: 0 } }),
+    /żaden agent nie ma skonfigurowanego modelu/);
+  assert.match(describeAgentWorker({ agentWorker: { enabled: true, processed: 2, failed: 1 },
+    taskLedger: { automaticallyExecutingWorkers: 4 } }), /pracują samodzielnie \(4 z modelem\).*Wykonane: 2 · błędy modelu: 1/);
+  assert.equal(taskStatusLabel('completed'), 'wykonane przez agenta');
+  assert.equal(taskStatusLabel('running'), 'agent pracuje');
+  const text = diagnosisDescription({ memory: { totalMiB: 1024, usedMiB: 512 }, runtime: { distribution: 'Debian' } });
+  assert.match(text, /RAM: 50%/);
+  assert.ok(text.length <= 2000);
+  assert.doesNotMatch(text, /jesteś|you are|rola|role/i);
+});
+
+test('chat keeps every agent conversation separate in the browser', () => {
+  const app = repo('debian13/ui/app.mjs');
+  const html = repo('debian13/ui/index.html');
+  assert.match(app, /function separateAgentConversation\(\)/);
+  assert.match(app, /activeSessionAgent = agent\.value/);
+  for (const id of ['aria', 'alex', 'astyria', 'aurelius']) {
+    assert.ok(html.includes(`data-tile-model="${id}"`), 'Missing model label for ' + id);
+  }
+  assert.doesNotMatch(html, /Bez specjalizacji/);
+});

@@ -31,6 +31,8 @@ import interactive_scripts as scripts
 import system_observability as observability
 from agent_monitor import AgentMonitor
 from ai_bridge import BridgeError, execute_bridge_session, terminate_session
+from agents_runtime import (AgentWorker, ConversationStore, SessionAgentMismatch,
+                            load_agent_providers, resolve_provider)
 
 MAX_BODY_BYTES = 16 * 1024
 MAX_VISION_BODY_BYTES = 3 * 1024 * 1024
@@ -46,6 +48,7 @@ RATE_LIMIT = 30
 
 TASK_UUID = r"[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}"
 TASK_DETAIL_PATH = re.compile(r"^/api/v1/tasks/(" + TASK_UUID + r")$")
+SESSION_MESSAGES_PATH = re.compile(r"^/api/v1/sessions/(" + TASK_UUID + r")/messages$")
 TASK_CANCEL_PATH = re.compile(r"^/api/v1/tasks/(" + TASK_UUID + r")/cancel$")
 TASK_DISPATCH_PATH = re.compile(r"^/api/v1/tasks/(" + TASK_UUID + r")/dispatch$")
 WORK_KINDS = frozenset({"development", "bugfix", "audit", "research"})
@@ -298,13 +301,25 @@ def validate_image(image: object) -> str:
     return "data:" + mime + ";base64," + encoded
 
 
-def complete_chat(profile: str, message: str, config: dict, image: str | None = None) -> tuple[str, str]:
-    if not config["model_chat_url"] or not config["model_api_key"] or not config["model_name"]:
+def provider_source(chat_url: str) -> str:
+    return "ollama" if urllib.parse.urlsplit(chat_url).hostname == "ollama" else "model_provider"
+
+
+def ready_agents(config: dict) -> set[str]:
+    """Agents whose own (or shared) model provider is fully configured."""
+    return {agent for agent in PROFILES if resolve_provider(agent, config)["configured"]}
+
+
+def complete_chat(profile: str, message: str, config: dict, image: str | None = None,
+                  history: list[dict] | None = None) -> tuple[str, str]:
+    # Each agent uses its own provider/model when MODEL_<AGENT>_* is set.
+    provider = resolve_provider(profile, config)
+    if not provider["configured"]:
         raise ApiError(503, "provider_not_configured", "No AI model provider is configured.")
-    model = config.get("vision_model_name", "") if image is not None else config["model_name"]
+    model = config.get("vision_model_name", "") if image is not None else provider["model_name"]
     if not model:
         raise ApiError(503, "vision_not_configured", "A vision model is not configured.")
-    is_ollama = urllib.parse.urlsplit(config["model_chat_url"]).hostname == "ollama"
+    is_ollama = provider_source(provider["chat_url"]) == "ollama"
     user_content = message if image is None else [
         {"type": "text", "text": message},
         # Ollama's /v1 Chat Completions docs use a string image_url.
@@ -313,16 +328,16 @@ def complete_chat(profile: str, message: str, config: dict, image: str | None = 
     payload = json.dumps({
         "model": model,
         # No forced personality, specialty, root claims or system prompt.
-        # The actual provider handles its model's base behavior; API tools
-        # still enforce real permissions independently from chat output.
-        "messages": [{"role": "user", "content": user_content}],
+        # Only this agent's own conversation (operator + its own replies) is
+        # sent; API tools still enforce real permissions independently.
+        "messages": [*(history or []), {"role": "user", "content": user_content}],
         "temperature": 0.2,
     }).encode("utf-8")
     request = urllib.request.Request(
-        config["model_chat_url"],
+        provider["chat_url"],
         data=payload,
         headers={
-            "Authorization": "Bearer " + config["model_api_key"],
+            "Authorization": "Bearer " + provider["api_key"],
             "Content-Type": "application/json",
             "Accept": "application/json",
         },
@@ -373,11 +388,7 @@ def runtime_diagnostics(server) -> dict:
         "effectiveUid": os.geteuid(),
         "effectiveGid": os.getegid(),
         "workspaceWritable": os.access(server.workspace, os.W_OK),
-        "providerConfigured": bool(
-            server.config["model_chat_url"]
-            and server.config["model_api_key"]
-            and server.config["model_name"]
-        ),
+        "providerConfigured": bool(ready_agents(server.config)),
         "linuxSecurity": linux_security,
     }
 
@@ -395,12 +406,35 @@ class Debian13Server(http.server.ThreadingHTTPServer):
         self._rates: dict[str, tuple[float, int]] = {}
         self._rates_lock = threading.Lock()
         self.agent_monitor = None
+        self.agent_worker = None
+        # One conversation belongs to one agent; contexts are never shared.
+        self.conversations = ConversationStore()
         super().__init__(address, SystemHandler)
         if config.get("agent_monitor_enabled", False):
             self.agent_monitor = AgentMonitor(
                 interval_seconds=config.get("agent_monitor_interval", 30))
+        if config.get("agent_worker_enabled", False):
+            self.agent_worker = AgentWorker(
+                self.work_store,
+                complete=lambda agent, text: complete_chat(agent, text, self.config),
+                ready_agents=self.worker_agents,
+                interval_seconds=config.get("agent_worker_interval", 5),
+            )
+
+    def worker_agents(self) -> set[str]:
+        """Agents the local worker may serve right now."""
+        agents = ready_agents(self.config)
+        # With remote dispatch enabled, Alex's tasks belong to the original Alex.
+        if os.environ.get("ALEX_ALLOW_TASK_DISPATCH") == "1":
+            agents.discard("alex")
+        return agents
+
+    def worker_running_for(self, agent: str) -> bool:
+        return self.agent_worker is not None and agent in self.worker_agents()
 
     def server_close(self):
+        if self.agent_worker is not None:
+            self.agent_worker.close()
         if self.agent_monitor is not None:
             self.agent_monitor.close()
         super().server_close()
@@ -426,16 +460,17 @@ class SystemHandler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def _send_chat_events(self, content: str, profile: str, model: str) -> None:
+    def _send_chat_events(self, content: str, profile: str, model: str,
+                          session_id: str, source: str) -> None:
         # A provider response is delivered as a single event after completion.
-        # This is NOT token-by-token model streaming and is not persisted.
-        source = "ollama" if urllib.parse.urlsplit(
-            self.server.config["model_chat_url"]
-        ).hostname == "ollama" else "model_provider"
+        # This is NOT token-by-token model streaming. Conversation memory is
+        # kept in this process only (not persisted to disk).
         frames = [
-            ("meta", {"model": model, "session_persisted": False}),
+            ("meta", {"model": model, "session_id": session_id,
+                      "session_persisted": False, "memory": "in_process_per_agent"}),
             ("delta", {"text": content}),
-            ("done", {"agent": profile, "source": source, "model": model}),
+            ("done", {"agent": profile, "source": source, "model": model,
+                      "session_id": session_id}),
         ]
         body = "".join(
             "event: " + event + "\n" +
@@ -556,11 +591,7 @@ class SystemHandler(http.server.BaseHTTPRequestHandler):
                     {"id": key, "name": value["name"], "active": False}
                     for key, value in PROFILES.items()
                 ],
-                "providerConfigured": bool(
-                    self.server.config["model_chat_url"]
-                    and self.server.config["model_api_key"]
-                    and self.server.config["model_name"]
-                ),
+                "providerConfigured": bool(ready_agents(self.server.config)),
             })
             return
         if self.path == "/v1/diagnostics":
@@ -588,28 +619,53 @@ class SystemHandler(http.server.BaseHTTPRequestHandler):
                     "status": "configured" if report["providerConfigured"] else "not_configured",
                     "inference": "unverified",
                 },
-                "task_state": "Brak uruchomionych workerów",
+                "task_state": (
+                    "Worker agentów aktywny: " + ", ".join(
+                        PROFILES[a]["name"] for a in sorted(self.server.worker_agents()))
+                    if self.server.agent_worker is not None and self.server.worker_agents()
+                    else "Brak uruchomionych workerów"
+                ),
             })
+            return
+        match = SESSION_MESSAGES_PATH.fullmatch(self.path)
+        if match:
+            transcript = self.server.conversations.transcript(match.group(1))
+            if transcript is None:
+                self._send_json(404, {"error": {"code": "session_not_found",
+                                                "message": "Conversation expired or unknown."}})
+            else:
+                self._send_json(200, {"sessionId": match.group(1), "persisted": False, **transcript})
             return
         if self.path == "/api/v1/original-agents":
             self._send_json(200, original_agents_report())
             return
         if self.path == "/api/v1/agents":
-            self._send_json(200, {"agents": [
-                {"id": key, "name": profile["name"],
-                 "privileges": "not_granted_by_profile",
-                 "access_level": "runtime_enforced",
-                 "status": "profile_configured", "worker": "not_running"}
-                for key, profile in PROFILES.items()
-            ]})
+            agents = []
+            for key, profile in PROFILES.items():
+                provider = resolve_provider(key, self.server.config)
+                agents.append({
+                    "id": key, "name": profile["name"],
+                    "privileges": "not_granted_by_profile",
+                    "access_level": "runtime_enforced",
+                    "status": "profile_configured",
+                    "worker": "running" if self.server.worker_running_for(key) else "not_running",
+                    # Independence facts: no role/persona, own model, own memory.
+                    "personaInjected": False,
+                    "model": provider["model_name"] or None,
+                    "modelConfigured": provider["configured"],
+                    "dedicatedModel": provider["dedicated"],
+                    "memory": "own_conversations_in_process",
+                })
+            self._send_json(200, {"agents": agents})
             return
         if self.path == "/api/v1/tasks":
             tasks = self.server.work_store.list_tasks()
             for task in tasks:
                 if task.get("agent") == "alex":
                     task["alexSubmission"] = self.server.work_store.get_alex_submission(task["id"])
-            self._send_json(200, {"tasks": tasks,
-                                  "storage": "sqlite", "workersRunning": 0})
+            self._send_json(200, {"tasks": tasks, "storage": "sqlite",
+                                  "workersRunning": len(self.server.worker_agents())
+                                  if self.server.agent_worker is not None else 0})
             return
         if self.path == "/api/v1/events":
             self._send_json(200, {"events": self.server.work_store.list_events(),
@@ -817,10 +873,27 @@ class SystemHandler(http.server.BaseHTTPRequestHandler):
                 if not isinstance(message, str) or not message.strip() or len(message) > MAX_MESSAGE_CHARS:
                     raise ApiError(400, "invalid_message", "Message must contain 1–4000 characters.")
                 image = validate_image(data.get("image")) if self.path == "/v1/vision" else None
-                content, model = complete_chat(profile, message.strip(), self.server.config, image)
                 if self.path == "/api/v1/chat/stream":
-                    self._send_chat_events(content, profile, model)
+                    session_id = data.get("session_id") or ConversationStore.new_id()
+                    if not isinstance(session_id, str) or not re.fullmatch(TASK_UUID, session_id):
+                        raise ApiError(400, "invalid_session", "session_id must be a UUID.")
+                    try:
+                        history = self.server.conversations.history(session_id, profile)
+                    except SessionAgentMismatch:
+                        raise ApiError(409, "session_agent_mismatch",
+                                       "This conversation belongs to another agent; start a new chat.") from None
+                    content, model = complete_chat(profile, message.strip(), self.server.config,
+                                                   history=history)
+                    source = provider_source(resolve_provider(profile, self.server.config)["chat_url"])
+                    try:
+                        self.server.conversations.append(session_id, profile, message.strip(),
+                                                         content, model, source)
+                    except SessionAgentMismatch:
+                        raise ApiError(409, "session_agent_mismatch",
+                                       "This conversation belongs to another agent; start a new chat.") from None
+                    self._send_chat_events(content, profile, model, session_id, source)
                     return
+                content, model = complete_chat(profile, message.strip(), self.server.config, image)
                 self._send_json(200, {
                     "requestId": request_id,
                     "profile": profile,
@@ -853,8 +926,16 @@ def load_config() -> dict:
         provider_url = validate_provider_url(os.environ.get("MODEL_CHAT_URL", "").strip())
     except ValueError as exc:
         raise SystemExit(str(exc)) from exc
+    try:
+        agent_providers = load_agent_providers(os.environ, validate_provider_url)
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
     return {
         "api_token": token,
+        "agent_providers": agent_providers,
+        # The worker only acts for agents whose model is configured; set
+        # DEBIAN13_AGENT_WORKER=0 to keep every task in the review queue.
+        "agent_worker_enabled": os.environ.get("DEBIAN13_AGENT_WORKER", "1") != "0",
         "model_chat_url": provider_url,
         "model_api_key": os.environ.get("MODEL_API_KEY", ""),
         "model_name": os.environ.get("MODEL_NAME", ""),
