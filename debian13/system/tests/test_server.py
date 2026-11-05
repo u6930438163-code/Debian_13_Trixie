@@ -113,6 +113,23 @@ class Debian13ApiTests(unittest.TestCase):
         self.assertEqual(data["stdout"], "hello Debian 13\n")
         self.assertEqual(data["exitCode"], 0)
 
+    def test_terminal_sse_frames_use_real_line_breaks(self):
+        self.connection.request(
+            "POST", "/api/v1/terminal/stream",
+            body=json.dumps({"command": "cat hello.txt"}),
+            headers={"Authorization": "Bearer " + TOKEN,
+                     "Content-Type": "application/json"},
+        )
+        response = self.connection.getresponse()
+        events = response.read().decode("utf-8")
+        self.assertEqual(response.status, 200)
+        self.assertTrue(response.getheader("Content-Type").startswith("text/event-stream"))
+        self.assertIn('event: meta\\n' .replace('\\\\n', '\\n'), events)
+        self.assertIn('event: delta\\n' .replace('\\\\n', '\\n'), events)
+        self.assertIn('event: done\\n' .replace('\\\\n', '\\n'), events)
+        self.assertIn("hello Debian 13", events)
+        self.assertNotIn(r"\\n", events)
+
     def test_terminal_rejects_shells_unknown_commands_and_paths_outside_workspace(self):
         self.assertEqual(self.request_json("POST", "/v1/terminal", {"command": "sh -c id"})[0], 403)
         status, data = self.request_json("POST", "/v1/terminal", {"command": "cat ../../etc/passwd"})
