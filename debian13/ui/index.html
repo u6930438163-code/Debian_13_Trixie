@@ -142,6 +142,20 @@
                 </div>
               </section>
             </div>
+            <section class="hyperspace-dialog" aria-labelledby="hyperspace-dialog-title">
+              <div class="hyperspace-dialog-heading"><div><span class="hyperspace-dialog-kicker">TRANSMISJA · CZAT AGENTÓW</span><h3 id="hyperspace-dialog-title">Dialog Hyperspace</h3></div><span>Połączenie przez prawdziwe API</span></div>
+              <div class="hyperspace-dialog-stage"><p>Wybierz agenta i wyślij polecenie. Przejdziesz do pełnego, dużego czatu Trixie — tylko tam zobaczysz rzeczywistą odpowiedź modelu i stan zadania. Funkcja „Wszyscy” pozostaje niedostępna do czasu prawdziwej integracji.</p></div>
+              <form id="hyperspace-chat-launch-form" class="hyperspace-dialog-compose">
+                <label for="hyperspace-chat-agent">Agent</label>
+                <select id="hyperspace-chat-agent" aria-label="Agent rozmowy">
+                  <option value="aria">Aria</option><option value="alex">Alex</option><option value="astyria">Astyria</option><option value="aurelius">Aurelius</option>
+                </select>
+                <label for="hyperspace-chat-message">Wiadomość</label>
+                <input id="hyperspace-chat-message" name="message" type="text" maxlength="4000" required placeholder="Wpisz polecenie lub wiadomość do AI…" autocomplete="off" />
+                <button type="submit" class="hyperspace-button is-primary">Wyślij do czatu</button>
+              </form>
+              <p id="hyperspace-chat-feedback" role="status" aria-live="polite" class="hyperspace-dialog-footnote"></p>
+            </section>
             <div class="hyperspace-module-heading"><div><small>OBSZAR ROBOCZY</small><h3>Moduły systemu</h3></div><span>Wybierz widok</span></div>
             <div class="hyperspace-modules">
               <button type="button" data-view="chat" class="hyperspace-module"><span class="hyperspace-module-icon">◉</span><strong>Dialog agentów</strong><small>Czat i kanały oryginalnych agentów</small></button>
