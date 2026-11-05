@@ -17,9 +17,27 @@ research), `title` (1–120 chars) and `description` (1–2000 chars).
 It creates a review-only task in the SQLite Work queue, returning
 `status: queued`, `executionStarted: false` and `requires_approval: 1`.
 Both stdio MCP (via authorized HTTP API) and HTTP MCP (via the authenticated
-backend Work store) support queueing. This is **not autonomous execution**:
-it does not run a model, shell commands, edit files, grant root, execute
-GitHub writes or make purchases. All other MCP tools are read-only.
+backend Work store) support queueing. Queueing is **not autonomous execution**: it does not run a model or
+worker, execute shell commands, edit files, grant root, execute GitHub
+writes or make purchases. The separate model-chat tool calls a real configured
+provider but does not execute commands or run background agents.
+The MCP server also exposes three additional tools:
+
+- `debian13_work_task_detail` (read-only): retrieve a queued Work task by UUID.
+- `debian13_cancel_work_task` (write): cancel a queued task before external handoff.
+  It cannot retract a task already handed to Alex.
+- `debian13_chat_agent` (model action): send a message to the configured
+  text-model provider under one selected profile (`alex`, `aria`,
+  `astyria`, `aurelius`). No arbitrary system instruction or specialty is
+  injected; the reply is returned only on successful model inference.
+  The response explicitly states `originalAgentExecutionVerified: false` and
+  `sessionPersisted: false`; this is **not** a conversation with a verified
+  original autonomous worker. A model provider may charge for API usage.
+
+There are now **11 MCP tools** (eight reads, task queue, cancellation, model
+chat). Every tool requires authentication and rejects invalid arguments.
+No arbitrary shell or filesystem write is exposed through MCP.
+
 A deployed, authorized client and verified original agent workers are
 needed before treating this as a live bidirectional AI integration.
 
@@ -165,3 +183,28 @@ Check GitHub Actions runs on the current commit. A passing CI run proves
 only the code and temporary test environment. A real **connected** state
 requires a verified client handshake, reachable deployment, valid
 permissions and (for AI tasks) evidence of an actual worker action.
+
+
+### ChatGPT connection limitations and next step
+
+Source code updates and passing CI are not equivalent to a live ChatGPT MCP
+connection. ChatGPT needs a reachable, authenticated HTTPS MCP endpoint
+or a Secure MCP Tunnel, a verified client handshake, and a plugin/app that
+has permission to use each tool. The current HTTP server requires a private
+operator Bearer token; do not publish that token or disable authentication.
+
+As documented by OpenAI for November 2026, full custom MCP with write
+actions is offered to ChatGPT Business and Enterprise/Edu on web, subject to
+workspace permissions. A personal Plus account does not get those full write
+permissions merely by synchronizing code. The existing GitHub connection
+inside ChatGPT is a distinct path for reviewing and editing the repository.
+
+Minimal functional verification:
+1. Confirm the external HTTPS endpoint is reachable, private and secure.
+2. Authenticate and call `initialize`, then `tools/list`.
+3. Exercise `debian13_work_task_detail` and queue/cancel with a disposable
+   task, verifying that the Work store changes.
+4. Test `debian13_chat_agent` only once a provider is available, and
+   do not mistake a generic model response for the owner's original AI.
+5. Independently verify a worker receiving a real task and reporting its
+   result before claiming autonomous or bidirectional execution.
