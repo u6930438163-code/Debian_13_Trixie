@@ -56,10 +56,10 @@ export function bindDesignControls(doc, storage = null) {
     root.dataset.chatFocus = String(isFocused);
     if (focusButton) {
       focusButton.setAttribute('aria-pressed', String(isFocused));
-      focusButton.textContent = isFocused ? '⤡ Pokaż agentów' : '⤢ Duży czat';
+      focusButton.textContent = isFocused ? '⤡ Zmniejsz (Pokaż agentów)' : '⤢ Pełny ekran';
       focusButton.setAttribute('aria-label', isFocused
-        ? 'Wyłącz powiększony czat i pokaż kafelki agentów'
-        : 'Powiększ czat, ukryj kafelki agentów');
+        ? 'Wyłącz pełny ekran i pokaż agentów'
+        : 'Włącz czat na cały ekran');
     }
     if (persist) save(FOCUS_KEY, isFocused ? '1' : '0');
     return isFocused;

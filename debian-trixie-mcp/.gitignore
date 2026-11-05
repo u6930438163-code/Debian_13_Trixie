@@ -1,0 +1,18 @@
+# Wirtualne środowisko Pythona (PEP 668)
+.venv/
+venv/
+ENV/
+
+# Pamięć podręczna Pythona
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Plik konfiguracyjny z sekretami i tokenami (chmod 600)
+.env
+
+# Logi i pliki tymczasowe
+*.log
+.coverage
+.pytest_cache/
+.DS_Store

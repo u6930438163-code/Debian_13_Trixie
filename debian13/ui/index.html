@@ -174,7 +174,8 @@
                 <div class="hyperspace-mini">
                   <div><span>API systemowe</span><strong id="hyperspace-runtime-indicator">Oczekiwanie na pomiar</strong></div>
                   <div><span>Pamięć RAM</span><strong id="hyperspace-ram">—</strong><progress id="hyperspace-ram-bar" class="meter" max="100" value="0" aria-label="Wykorzystanie pamięci RAM"></progress></div>
-                  <div><span>Agenci</span><strong>4 profile · workery do weryfikacji</strong></div>
+                  <div><span>Agenci</span><strong>4 profile · workery do weryfikacji</strong>
+                    <button class="button button-ghost button-small" type="button" data-reconnect-agents><svg class="icon" aria-hidden="true"><use href="#i-refresh"/></svg>Połącz ponownie agentów</button></div>
                   <div><span>Synchronizacja kodu</span><strong>GitHub main → AI Studio: Pull changes</strong></div>
                 </div>
               </section>
@@ -198,7 +199,7 @@
                 <p id="agent-channel-feedback" class="chat-workspace-subtitle">Wybierz oryginalnego agenta. Połączenie jest weryfikowane przez API.</p>
               </div>
               <div class="chat-heading-actions">
-                <button id="chat-focus-toggle" class="button button-ghost button-small" type="button" aria-pressed="false" aria-controls="agent-tiles">⤢ Duży czat</button>
+                <button id="chat-focus-toggle" class="button button-ghost button-small" type="button" aria-pressed="false" aria-controls="agent-tiles">⤢ Pełny ekran</button>
                 <button id="new-chat-inline" class="button button-secondary button-small" type="button"><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg>Nowy czat</button>
               </div>
             </div>
@@ -573,7 +574,11 @@
             </div>
 
             <section class="card" aria-labelledby="original-agents-title">
-              <h3 id="original-agents-title" class="card-title-lg"><svg class="icon" aria-hidden="true"><use href="#i-users"/></svg>Oryginalni agenci AI właściciela</h3>
+              <div class="card-heading">
+                <h3 id="original-agents-title" class="card-title-lg"><svg class="icon" aria-hidden="true"><use href="#i-users"/></svg>Oryginalni agenci AI właściciela</h3>
+                <button id="reconnect-agents" class="button button-primary button-small" type="button" data-reconnect-agents><svg class="icon" aria-hidden="true"><use href="#i-refresh"/></svg>Połącz ponownie (SVL Core)</button>
+              </div>
+              <p id="reconnect-feedback" class="form-feedback" role="status" aria-live="polite"></p>
               <p class="hint">
                 Alex, Aria, Astyria i Aurelius pochodzą z istniejącej konfiguracji GitHub.
                 Dostępny profil ani rejestr zadań nie oznaczają działającego modelu AI.

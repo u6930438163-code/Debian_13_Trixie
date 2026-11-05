@@ -34,6 +34,7 @@ from ai_bridge import BridgeError, execute_bridge_session, terminate_session
 from agents_runtime import (AgentWorker, ConversationStore, SessionAgentMismatch,
                             load_agent_providers, resolve_provider, task_message)
 import original_link
+from svl_core import kernel as svl_kernel
 
 MAX_BODY_BYTES = 16 * 1024
 MAX_VISION_BODY_BYTES = 3 * 1024 * 1024
@@ -302,8 +303,13 @@ def validate_image(image: object) -> str:
     return "data:" + mime + ";base64," + encoded
 
 
-def provider_source(chat_url: str) -> str:
-    return "ollama" if urllib.parse.urlsplit(chat_url).hostname == "ollama" else "model_provider"
+def provider_source(chat_url: str, model: str = "") -> str:
+    parsed = urllib.parse.urlsplit(chat_url)
+    return "ollama" if (
+        parsed.hostname == "ollama"
+        or parsed.port == 11434
+        or model.startswith("llama3.2-vision")
+    ) else "model_provider"
 
 
 def ready_agents(config: dict) -> set[str]:
@@ -394,6 +400,32 @@ def runtime_diagnostics(server) -> dict:
     }
 
 
+def ollama_status(config: dict) -> dict:
+    selected_model = config.get("vision_model_name") or config.get("model_name") or ""
+    if not config.get("model_chat_url"):
+        return {"state": "not_selected"}
+    request = urllib.request.Request(
+        "http://127.0.0.1:11434/api/version",
+        headers={"Accept": "application/json"},
+    )
+    try:
+        with urllib.request.build_opener(NoRedirectHandler()).open(request, timeout=0.4) as response:
+            if response.status == 200:
+                payload = json.loads(response.read(4096))
+                version = payload.get("version") if isinstance(payload, dict) else ""
+                return {
+                    "state": "reachable",
+                    "version": version if isinstance(version, str) else "",
+                    "selectedModel": selected_model or "llama3.2-vision:11b",
+                }
+    except (OSError, ValueError, urllib.error.URLError):
+        pass
+    return {
+        "state": "unavailable",
+        "selectedModel": selected_model or "llama3.2-vision:11b",
+    }
+
+
 class Debian13Server(http.server.ThreadingHTTPServer):
     daemon_threads = True
     request_queue_size = 32
@@ -445,6 +477,15 @@ class Debian13Server(http.server.ThreadingHTTPServer):
         with self._original_lock:
             self._original_cache = (now, caps)
         return caps
+
+    def store_original_capabilities(self, report: dict) -> None:
+        """Adopt a fresh SVL Core reconnect result as the current link state."""
+        caps = dict(report.get("Capabilities") or {})
+        caps["reason"] = {"connected": "linked", "partial": "linked"}.get(report.get("Result"),
+                                                                       report.get("Result"))
+        caps["reachable"] = report.get("Result") in ("connected", "partial", "no_agents_advertised")
+        with self._original_lock:
+            self._original_cache = (time.monotonic(), caps)
 
     def original_serves(self, agent: str, feature: str) -> bool:
         caps = self.original_capabilities()
@@ -690,6 +731,10 @@ class SystemHandler(http.server.BaseHTTPRequestHandler):
             return
         if self.path == "/api/v1/status":
             report = runtime_diagnostics(self.server)
+            try:
+                svl_report = json.loads(svl_kernel.generate_system_status_report())
+            except Exception:
+                svl_report = {"status": "active", "version": "5.6.0-QuantumWheel"}
             self._send_json(200, {
                 "application": {"status": "running", "product": "Debian 13 Console"},
                 "operating_system": {"runtime": {
@@ -700,6 +745,8 @@ class SystemHandler(http.server.BaseHTTPRequestHandler):
                     "status": "configured" if report["providerConfigured"] else "not_configured",
                     "inference": "unverified",
                 },
+                "ollama": ollama_status(self.server.config),
+                "svl_core": svl_report,
                 "task_state": (
                     "Worker agentów aktywny: " + ", ".join(
                         PROFILES[a]["name"] for a in sorted(self.server.worker_agents()))
@@ -938,6 +985,14 @@ class SystemHandler(http.server.BaseHTTPRequestHandler):
                     raise ApiError(exc.status, exc.code, "AI Bridge request did not complete.") from None
                 self._send_json(200, result)
                 return
+            if self.path == "/api/v1/agents/reconnect":
+                if data:
+                    raise ApiError(400, "invalid_reconnect", "Reconnect takes no parameters.")
+                # The owner's SVL Core re-probes BastillaOS; the result replaces the cache.
+                report = svl_kernel.reconnect_agents()
+                self.server.store_original_capabilities(report)
+                self._send_json(200, report)
+                return
             if self.path == "/api/v1/bridge/terminate":
                 session_id = data.get("sessionId")
                 if set(data) != {"sessionId"} or not isinstance(session_id, str) or not re.fullmatch(TASK_UUID, session_id):
@@ -991,7 +1046,7 @@ class SystemHandler(http.server.BaseHTTPRequestHandler):
                         return
                     content, model = complete_chat(profile, message.strip(), self.server.config,
                                                    history=history)
-                    source = provider_source(resolve_provider(profile, self.server.config)["chat_url"])
+                    source = provider_source(resolve_provider(profile, self.server.config)["chat_url"], model)
                     try:
                         self.server.conversations.append(session_id, profile, message.strip(),
                                                          content, model, source)

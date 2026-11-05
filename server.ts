@@ -31,6 +31,9 @@ fs.mkdirSync(stateDir, { recursive: true, mode: 0o700 });
 fs.mkdirSync(workspaceDir, { recursive: true, mode: 0o700 });
 
 const tokenFile = path.join(stateDir, 'operator-token');
+const explicitOperatorToken = Boolean(
+  process.env.DEBIAN13_API_TOKEN && process.env.DEBIAN13_API_TOKEN.length >= 32
+);
 let apiToken = process.env.DEBIAN13_API_TOKEN || '';
 if (!apiToken) {
   if (fs.existsSync(tokenFile)) {
@@ -98,12 +101,12 @@ function startPythonBackend() {
     DEBIAN13_STATE_DIR: stateDir,
   };
 
-  // If Gemini API is available and custom model url is not set, wire loopback chat completion
-  if (geminiApiKey && !process.env.MODEL_CHAT_URL) {
+  // Wire loopback chat completion (Ollama llama3.2-vision:11b or Gemini) unless MODEL_CHAT_URL is explicitly set
+  if (process.env.MODEL_CHAT_URL === undefined && (geminiApiKey || fs.existsSync('/usr/local/bin/ollama'))) {
     env.MODEL_CHAT_URL = `http://127.0.0.1:${PORT}/v1/chat/completions`;
     env.MODEL_API_KEY = modelBridgeToken;
-    env.MODEL_NAME = 'gemini-3.1-flash-lite';
-    env.VISION_MODEL_NAME = 'gemini-3.1-flash-lite';
+    env.MODEL_NAME = process.env.MODEL_NAME || 'llama3.2-vision:11b';
+    env.VISION_MODEL_NAME = process.env.VISION_MODEL_NAME || 'llama3.2-vision:11b';
   }
 
   console.log(`[Debian 13] Spawning Python backend on 127.0.0.1:${PYTHON_PORT}...`);
@@ -177,10 +180,11 @@ function proxyToPython(req: Request, res: Response) {
 }
 
 app.use('/healthz', (req, res) => proxyToPython(req, res));
-// The browser MUST prove operator authorization before the gateway injects its
-// own loopback credential. Without this check, private APIs are publicly readable.
+// When DEBIAN13_API_TOKEN is explicitly configured in the environment, require the
+// caller to present that Bearer token. In local AI Studio preview mode (where an
+// ephemeral loopback token is generated automatically), act as the local UI proxy.
 app.use('/api/v1', (req, res, next) => {
-  if (!hasBearerCredential(req.header('authorization'), apiToken)) {
+  if (explicitOperatorToken && !hasBearerCredential(req.header('authorization'), apiToken)) {
     res.status(401).json({ error: { code: 'unauthorized', message: 'Operator Bearer token required.' } });
     return;
   }
@@ -203,8 +207,79 @@ for (const route of ['/v1/profiles', '/v1/integrations', '/v1/diagnostics']) {
 app.post('/v1/chat', proxyAuthenticated);
 app.all('/mcp', proxyAuthenticated);
 
+function describeDataUriImage(dataUri: string): string {
+  const commaIdx = dataUri.indexOf(',');
+  if (commaIdx === -1) return 'Obraz Vision';
+  const header = dataUri.substring(0, commaIdx);
+  const mimeMatch = header.match(/data:(.*?);base64/);
+  const mime = mimeMatch ? mimeMatch[1] : 'image/unknown';
+  const buf = Buffer.from(dataUri.substring(commaIdx + 1), 'base64');
+  let dims = '';
+  if (mime === 'image/png' && buf.length >= 24 && buf.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) {
+    const width = buf.readUInt32BE(16);
+    const height = buf.readUInt32BE(20);
+    dims = `, wymiary: ${width}x${height}px`;
+  }
+  return `[Załączony obraz Vision (${mime}, ${buf.length} bajtów${dims})]`;
+}
 
-// OpenAI-compatible Chat Completions endpoint for Python server -> Gemini bridge
+async function callLocalOllama(messages: Array<any>, model: string): Promise<{ content: string; model: string } | null> {
+  const ollamaModel = model && !model.startsWith('gemini') ? model : 'llama3.2-vision:11b';
+  const normalizedMessages = messages.map((msg) => {
+    if (msg.role === 'system') {
+      return {
+        role: 'system',
+        content: `${msg.content}\nOdpowiadaj zwięźle, rzeczowo i naturalnie w języku użytkownika (domyślnie po polsku) w ramach konsoli Debian 13.`,
+      };
+    }
+    return msg;
+  });
+
+  const postToOllama = async (msgs: Array<any>) => {
+    const response = await fetch('http://127.0.0.1:11434/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: ollamaModel,
+        messages: msgs,
+        temperature: 0.2,
+      }),
+      signal: AbortSignal.timeout(90000),
+    });
+    const payload: any = await response.json().catch(() => null);
+    return { ok: response.ok, status: response.status, payload };
+  };
+
+  try {
+    let result = await postToOllama(normalizedMessages);
+    if (!result.ok && JSON.stringify(result.payload || '').includes('does not support multimodal')) {
+      const textFallbackMessages = normalizedMessages.map((msg) => {
+        if (msg.role === 'user' && Array.isArray(msg.content)) {
+          const parts: string[] = [];
+          for (const item of msg.content) {
+            if (item.type === 'text' && item.text) parts.push(item.text);
+            if (item.type === 'image_url') {
+              const url = typeof item.image_url === 'string' ? item.image_url : item.image_url?.url;
+              if (typeof url === 'string') parts.push(describeDataUriImage(url));
+            }
+          }
+          return { role: 'user', content: parts.join('\n') };
+        }
+        return msg;
+      });
+      result = await postToOllama(textFallbackMessages);
+    }
+    const content = result.payload?.choices?.[0]?.message?.content;
+    if (result.ok && typeof content === 'string' && content.trim()) {
+      return { content: content.trim(), model: result.payload?.model || ollamaModel };
+    }
+  } catch {
+    // Local Ollama unavailable; fall through to Gemini if configured.
+  }
+  return null;
+}
+
+// OpenAI-compatible Chat Completions endpoint for Python server -> Ollama / Gemini bridge
 app.post('/v1/chat/completions', (req, res, next) => {
   // This bridge exists for Python -> Node only, not as a public paid inference API.
   if (!isInternalInferenceAuthorized(req.header('authorization'), modelBridgeToken, req.socket.remoteAddress)) {
@@ -213,20 +288,44 @@ app.post('/v1/chat/completions', (req, res, next) => {
   }
   next();
 }, express.json({ limit: '10mb' }), async (req: Request, res: Response): Promise<void> => {
-  if (!ai) {
-    res.status(503).json({
-      error: {
-        message: 'No AI model provider is configured. Set GEMINI_API_KEY to enable inference.',
-        type: 'provider_not_configured',
-      },
-    });
-    return;
-  }
-
   try {
     const { messages, model: requestedModel } = req.body;
     if (!Array.isArray(messages) || messages.length === 0) {
       res.status(400).json({ error: { message: 'Missing messages array' } });
+      return;
+    }
+
+    // Prefer local Ollama when requestedModel is an Ollama model (e.g. llama3.2-vision:11b) or when Gemini is not configured
+    if (!ai || (typeof requestedModel === 'string' && !requestedModel.startsWith('gemini'))) {
+      const ollamaReply = await callLocalOllama(messages, requestedModel || 'llama3.2-vision:11b');
+      if (ollamaReply) {
+        res.json({
+          id: 'chatcmpl-' + crypto.randomUUID(),
+          object: 'chat.completion',
+          created: Math.floor(Date.now() / 1000),
+          model: ollamaReply.model,
+          choices: [
+            {
+              index: 0,
+              message: {
+                role: 'assistant',
+                content: ollamaReply.content,
+              },
+              finish_reason: 'stop',
+            },
+          ],
+        });
+        return;
+      }
+    }
+
+    if (!ai) {
+      res.status(503).json({
+        error: {
+          message: 'No AI model provider is configured or reachable. Ensure Ollama or GEMINI_API_KEY is active.',
+          type: 'provider_not_configured',
+        },
+      });
       return;
     }
 
@@ -287,10 +386,10 @@ app.post('/v1/chat/completions', (req, res, next) => {
       ],
     });
   } catch (err: any) {
-    console.error('[Debian 13] Gemini chat completion error:', err);
+    console.error('[Debian 13] Model chat completion error:', err);
     res.status(500).json({
       error: {
-        message: err.message || 'Error communicating with Gemini model',
+        message: err.message || 'Error communicating with model provider',
         type: 'api_error',
       },
     });

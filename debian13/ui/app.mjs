@@ -212,6 +212,7 @@ export function createApiClient({
     getAlexCapabilities: () => request('alex/capabilities'),
     bridge: (message, sessionId = '', useOpenai = true) => post('bridge', { message, sessionId, useOpenai }),
     terminateBridge: (sessionId) => post('bridge/terminate', { sessionId }),
+    reconnectAgents: () => post('agents/reconnect', {}),
     dispatchToAlex: (taskId) => request(`tasks/${encodeURIComponent(taskId)}/dispatch`, {method: 'POST'}),
     createTask: (task) => post('tasks', task),
     getTask: (taskId) => request(`tasks/${encodeURIComponent(taskId)}`),
@@ -1147,6 +1148,47 @@ async function prepareAlexDiagnosis(event) {
   }
 }
 
+// Summary of an SVL Core reconnect report (debian13/system/svl_core.py).
+export function reconnectSummary(report) {
+  const agents = Object.entries(report?.Agents ?? {});
+  const linked = agents.filter(([, state]) => state?.connected).map(([name]) => name);
+  if (report?.Result === 'not_configured') {
+    return 'Brak konfiguracji połączenia: ' + (report.Missing ?? []).join('; ');
+  }
+  if (report?.Result === 'connected') return `Połączono wszystkich agentów z BastillaOS: ${linked.join(', ')}.`;
+  if (report?.Result === 'partial') return `Połączeni: ${linked.join(', ')}. Pozostali nie są zgłaszani przez BastillaOS.`;
+  const reasons = {
+    source_offline: 'BastillaOS nie odpowiada (offline lub zły adres).',
+    source_rejected_token: 'BastillaOS odrzucił token — sprawdź DEBIAN13_ORIGINAL_AGENTS_TOKEN.',
+    source_protocol_missing: 'Ten BastillaOS nie ma protokołu Debian 13 (zaktualizuj wdrożenie).',
+    source_agents_unavailable: 'BastillaOS nie ma ustawionego tokenu dla Debiana 13.',
+    no_agents_advertised: 'BastillaOS działa, ale workery agentów są wyłączone (DEBIAN13_ORIGINAL_WORKERS_ENABLED=1) lub brak modelu.',
+  };
+  return reasons[report?.Result] ?? 'Nie udało się połączyć: ' + String(report?.Result ?? 'nieznany błąd');
+}
+
+let reconnectPending = false;
+async function reconnectAgents() {
+  if (reconnectPending) return;
+  reconnectPending = true;
+  const buttons = [...document.querySelectorAll('[data-reconnect-agents]')];
+  buttons.forEach((button) => { button.disabled = true; });
+  setText('reconnect-feedback', 'SVL Core łączy agentów z AI_Studio_BastillaOS…');
+  try {
+    const report = await api.reconnectAgents();
+    const summary = reconnectSummary(report);
+    setText('reconnect-feedback', summary);
+    setText('hyperspace-sync-feedback', summary);
+    await Promise.all([loadOriginalAgents(), loadAgents(), loadStatus()]);
+  } catch (error) {
+    setText('reconnect-feedback', 'Ponowne łączenie nieudane: ' + error.message);
+    setText('hyperspace-sync-feedback', 'Ponowne łączenie nieudane: ' + error.message);
+  } finally {
+    reconnectPending = false;
+    buttons.forEach((button) => { button.disabled = false; });
+  }
+}
+
 async function refreshDashboard() {
   // A global refresh pulls all runtime views from the real API; it does not
   // perform a GitHub push or AI Studio import.
@@ -1978,6 +2020,8 @@ if (typeof document !== 'undefined') {
   document.getElementById('refresh-tasks')?.addEventListener('click', refreshWork);
   document.getElementById('diagnostics-refresh')?.addEventListener('click', () => void loadDiagnostics());
   document.getElementById('diagnose-alex')?.addEventListener('click', prepareAlexDiagnosis);
+  document.querySelectorAll('[data-reconnect-agents]').forEach((button) =>
+    button.addEventListener('click', () => void reconnectAgents()));
   void refreshDashboard();
   let savedSession = '';
   try {

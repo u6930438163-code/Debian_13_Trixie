@@ -2644,7 +2644,6 @@ li.empty-state {
   }
 
   .chat-workspace-heading {
-    flex-wrap: nowrap;
     align-items: center;
   }
 
@@ -2652,8 +2651,8 @@ li.empty-state {
     font-size: 19px;
   }
 
-  #chat-focus-toggle {
-    display: none;
+  .chat-heading-actions .button {
+    padding: 0 10px;
   }
 
   .agent-tiles {
@@ -2859,4 +2858,54 @@ li.empty-state {
   line-height: 1.6;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+/* ---------- Full-screen chat ("Pełny ekran", from main) ---------- */
+html[data-chat-focus="true"] .topbar,
+html[data-chat-focus="true"] .sidebar,
+html[data-chat-focus="true"] .sidebar-backdrop,
+html[data-chat-focus="true"] .view-intro,
+html[data-chat-focus="true"] .footer,
+html[data-chat-focus="true"] .chat-workspace-heading .eyebrow,
+html[data-chat-focus="true"] .chat-workspace-subtitle {
+  display: none !important;
+}
+
+html[data-chat-focus="true"][data-active-view="chat"] .app-shell {
+  grid-template-rows: minmax(0, 1fr);
+  max-width: none;
+  height: var(--chat-viewport-height, 100dvh);
+}
+
+html[data-chat-focus="true"][data-active-view="chat"] .app-layout {
+  grid-template-columns: minmax(0, 1fr);
+  padding: 12px;
+}
+
+html[data-chat-focus="true"] .chat-workspace-heading {
+  align-items: center;
+  padding: 0 4px;
+}
+
+html[data-chat-focus="true"] .chat-workspace-heading h2 {
+  font-size: 17px;
+}
+
+/* The toggle is the only way back, so it stays visible (also on phones). */
+html[data-chat-focus="true"] #chat-focus-toggle {
+  display: inline-flex !important;
+  border-color: var(--design-accent);
+  background: var(--accent-soft);
+  color: var(--text);
+}
+
+@media (max-width: 760px) {
+  html[data-chat-focus="true"][data-active-view="chat"] .app-layout {
+    padding: 8px;
+  }
+}
+
+.hyperspace-mini [data-reconnect-agents] {
+  justify-self: start;
+  margin-top: 6px;
 }

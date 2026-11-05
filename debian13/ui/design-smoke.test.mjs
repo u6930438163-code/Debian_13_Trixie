@@ -213,3 +213,13 @@ test('tiles name the real BastillaOS agents only when the API reports a live lin
   assert.equal(originalAgentLinkLabel({}, { registryConfigured: true, link: { reason: 'source_offline' } }),
     'BastillaOS: offline');
 });
+
+test('SVL Core reconnect results are explained without claiming a link', async () => {
+  const { reconnectSummary } = await import('./app.mjs');
+  const all = { Result: 'connected', Agents: { Aria: { connected: true }, Alex: { connected: true } } };
+  assert.match(reconnectSummary(all), /Połączono wszystkich agentów z BastillaOS: Aria, Alex/);
+  assert.match(reconnectSummary({ Result: 'not_configured', Missing: ['ALEX_EXISTING_API_URL'] }), /ALEX_EXISTING_API_URL/);
+  assert.match(reconnectSummary({ Result: 'source_rejected_token' }), /odrzucił token/);
+  assert.match(reconnectSummary({ Result: 'no_agents_advertised' }), /DEBIAN13_ORIGINAL_WORKERS_ENABLED=1/);
+  assert.match(repo('debian13/ui/dev_server.py'), /"POST", "\/api\/v1\/agents\/reconnect"/);
+});

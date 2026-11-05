@@ -81,6 +81,16 @@ export BASTILLA_AGENTS_TOKEN="<ten sam sekret>"                    # lub ALEX_EX
 bash debian13/start-local.sh
 ```
 
+**3. Ponowne połączenie — Twój SVL Core** (`debian13/system/svl_core.py`):
+```bash
+python3 debian13/system/svl_core.py --reconnect   # kod wyjścia 0 = wszyscy czterej połączeni
+```
+To samo robi przycisk **„Połącz ponownie (SVL Core)”** w Ustawieniach i na Pulpicie
+(`POST /api/v1/agents/reconnect`). Raport podaje wynik (`connected`, `partial`,
+`no_agents_advertised`, `source_offline`, `source_rejected_token`, `not_configured`
+z listą brakujących ustawień), a `Agents_Active` w statusie SVL Core zawiera tylko
+agentów potwierdzonych przez BastillaOS.
+
 Gdy połączenie działa, kafelki agentów pokazują „Prawdziwy agent · BastillaOS” i
 „BastillaOS: połączony”, a odpowiedzi w czacie mają źródło `original_agent`.
 Jeśli BastillaOS jest niedostępny, kafelek mówi to wprost (`offline`, `zły token`,

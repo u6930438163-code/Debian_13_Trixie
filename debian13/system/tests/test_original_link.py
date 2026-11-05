@@ -95,6 +95,17 @@ class FakeBastilla(BaseHTTPRequestHandler):
         pass
 
 
+class SvlCoreWithoutConfigurationTests(unittest.TestCase):
+    def test_reconnect_lists_exactly_what_is_missing(self):
+        from svl_core import SVLSystemKernel
+        with mock.patch.dict(os.environ, {"ALEX_EXISTING_API_URL": "", "BASTILLA_REMOTE_API_URL": "",
+                                          "ALEX_EXISTING_API_TOKEN": "", "BASTILLA_AGENTS_TOKEN": ""}):
+            report = SVLSystemKernel().reconnect_agents()
+        self.assertEqual(report["Result"], "not_configured")
+        self.assertEqual(len(report["Missing"]), 2)
+        self.assertFalse(any(a["connected"] for a in report["Agents"].values()))
+
+
 class OriginalLinkTests(unittest.TestCase):
     def setUp(self):
         self.source = ThreadingHTTPServer(("127.0.0.1", 0), FakeBastilla)
@@ -188,6 +199,26 @@ class ServerUsesRealAgentsTests(OriginalLinkTests):
         status, report = self.request("GET", "/api/v1/original-agents")
         report = json.loads(report)
         self.assertTrue(all(a["connected"] and a["chatLinked"] for a in report["agents"]))
+
+    def test_svl_core_reconnect_reports_real_link_and_refreshes_server(self):
+        status, body = self.request("POST", "/api/v1/agents/reconnect", {})
+        report = json.loads(body)
+        self.assertEqual(status, 200)
+        self.assertEqual(report["Result"], "connected")
+        self.assertTrue(all(a["connected"] and a["chat"] and a["tasks"] for a in report["Agents"].values()))
+        status, body = self.request("GET", "/api/v1/status")
+        svl = json.loads(body)["svl_core"]
+        self.assertEqual(sorted(svl["Agents_Active"]), ["Alex", "Aria", "Astyria", "Aurelius"])
+        self.assertEqual(svl["Agents_Link"], "connected")
+
+    def test_svl_core_reconnect_reports_disabled_workers_honestly(self):
+        self.source.state["caps"] = []  # BastillaOS with DEBIAN13_ORIGINAL_WORKERS_ENABLED unset
+        status, body = self.request("POST", "/api/v1/agents/reconnect", {})
+        report = json.loads(body)
+        self.assertEqual((status, report["Result"]), (200, "no_agents_advertised"))
+        self.assertFalse(any(a["connected"] for a in report["Agents"].values()))
+        status, body = self.request("GET", "/api/v1/agents")
+        self.assertTrue(all(a["connection"] != "original_bastillaos" for a in json.loads(body)["agents"]))
 
     def test_work_task_is_done_by_the_real_agent(self):
         status, created = self.request("POST", "/api/v1/tasks", {
