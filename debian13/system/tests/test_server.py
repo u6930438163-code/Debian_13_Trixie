@@ -124,9 +124,9 @@ class Debian13ApiTests(unittest.TestCase):
         events = response.read().decode("utf-8")
         self.assertEqual(response.status, 200)
         self.assertTrue(response.getheader("Content-Type").startswith("text/event-stream"))
-        self.assertIn('event: meta\\n' .replace('\\\\n', '\\n'), events)
-        self.assertIn('event: delta\\n' .replace('\\\\n', '\\n'), events)
-        self.assertIn('event: done\\n' .replace('\\\\n', '\\n'), events)
+        self.assertIn('event: meta\n', events)
+        self.assertIn('event: delta\n', events)
+        self.assertIn('event: done\n', events)
         self.assertIn("hello Debian 13", events)
         self.assertNotIn(r"\\n", events)
 
