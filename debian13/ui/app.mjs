@@ -310,6 +310,9 @@ function renderRuntimeStatus(status) {
   const boot = osRuntime?.debian_13_boot_verified === true
     ? 'boot Debian 13 potwierdzony'
     : 'boot Debian 13 niepotwierdzony';
+  setText('hyperspace-api-state', status.application?.status === 'running' ? 'API: dostępne' : 'API: niezweryfikowane');
+  setText('hyperspace-runtime-indicator', status.application?.status === 'running' ? 'Odpowiedź API potwierdzona' : 'Brak potwierdzonego połączenia');
+  setText('hyperspace-model-state', modelStatusLabel(status.model));
   setText('application-status', application);
   setText('os-status', `${distribution} · ${boot}`);
   setText('model-status', modelStatusLabel(status.model));
@@ -920,7 +923,7 @@ function recordHistory(sessionId, title) {
 }
 
 function showView(view) {
-  const ids = { chat: 'chat-view', work: 'work-view', terminal: 'terminal-view', settings: 'settings-view' };
+  const ids = { hyperspace: 'hyperspace-view', chat: 'chat-view', work: 'work-view', diagnostics: 'diagnostics-view', terminal: 'terminal-view', settings: 'settings-view' };
   for (const [name, id] of Object.entries(ids)) {
     const section = document.getElementById(id);
     if (section) section.hidden = name !== view;
@@ -935,7 +938,7 @@ function showView(view) {
       button.setAttribute('aria-pressed', String(active));
     }
   }
-  const titles = { chat: 'W czym mogę pomóc?', work: 'Work', terminal: 'Terminal', settings: 'Status systemu' };
+  const titles = { hyperspace: 'Enter the Hyperspace', chat: 'W czym mogę pomóc?', work: 'Work', diagnostics: 'Diagnostyka', terminal: 'Terminal', settings: 'Status systemu' };
   setText('page-title', titles[view] ?? titles.chat);
 }
 
