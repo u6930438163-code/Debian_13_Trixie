@@ -199,3 +199,17 @@ test('chat keeps every agent conversation separate in the browser', () => {
   }
   assert.doesNotMatch(html, /Bez specjalizacji/);
 });
+
+test('tiles name the real BastillaOS agents only when the API reports a live link', async () => {
+  const { originalAgentLinkLabel, agentIndependenceLabel } = await import('./app.mjs');
+  assert.equal(agentIndependenceLabel({ connection: 'original_bastillaos', worker: 'running' }),
+    'Prawdziwy agent · BastillaOS · pracuje sam');
+  assert.equal(originalAgentLinkLabel({ connected: true, chatLinked: true }), 'BastillaOS: połączony');
+  assert.equal(originalAgentLinkLabel({ connected: true, chatLinked: false }), 'BastillaOS: tylko zadania');
+  assert.equal(originalAgentLinkLabel({ workerVerified: true }), 'BastillaOS: agent pracuje');
+  assert.equal(originalAgentLinkLabel({}, { registryConfigured: false }), 'BastillaOS: niepodłączony');
+  assert.equal(originalAgentLinkLabel({}, { registryConfigured: true, link: { reason: 'source_rejected_token' } }),
+    'BastillaOS: zły token');
+  assert.equal(originalAgentLinkLabel({}, { registryConfigured: true, link: { reason: 'source_offline' } }),
+    'BastillaOS: offline');
+});

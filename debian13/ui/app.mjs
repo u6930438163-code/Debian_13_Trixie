@@ -666,14 +666,13 @@ async function loadOriginalAgents() {
       heading.textContent = agent.name;
       const status = document.createElement('p');
       status.className = 'agent-state';
-      status.textContent = agent.workerVerified === true
-        ? 'Zweryfikowany proces AI'
-        : response.registryReachable
-          ? 'Rejestr źródłowy dostępny · praca AI niepotwierdzona'
-          : 'Oryginalny agent niepodłączony';
+      status.textContent = originalAgentLinkLabel(agent, response);
       const details = document.createElement('p');
       details.className = 'worker-state';
-      details.textContent = `Zadania w rejestrze: ${Number(agent.tasksInRegistry) || 0}; uruchomione workery: niepotwierdzone`;
+      details.textContent = agent.connected === true
+        ? `Czat: ${agent.chatLinked ? 'tak' : 'nie'} · zadania: ${agent.tasksLinked ? 'tak' : 'nie'}`
+          + ` · worker: ${agent.workerState ?? 'nieznany'} · wykonane w BastillaOS: ${Number(agent.completedInSource) || 0}`
+        : `Zadania w rejestrze: ${Number(agent.tasksInRegistry) || 0}; połączenie z BastillaOS nieaktywne`;
       item.append(heading, status, details);
       fragment.append(item);
     }
@@ -681,9 +680,7 @@ async function loadOriginalAgents() {
     for (const agent of response.agents) {
       const id = String(agent.id || agent.name || '').toLowerCase();
       const statusElement = document.querySelector(`[data-tile-status="${id}"]`);
-      if (statusElement) statusElement.textContent = agent.workerVerified === true
-        ? 'Źródło AI Studio: zweryfikowane' : response.registryReachable
-          ? 'Źródło AI Studio: rejestr' : 'Źródło AI Studio: niepodłączone';
+      if (statusElement) statusElement.textContent = originalAgentLinkLabel(agent, response);
     }
   } catch (error) {
     list.replaceChildren();
@@ -694,8 +691,25 @@ async function loadOriginalAgents() {
   }
 }
 
+// Link state of the owner's real agent in AI_Studio_BastillaOS, as reported by the API.
+export function originalAgentLinkLabel(agent, response = {}) {
+  if (agent?.workerVerified === true) return 'BastillaOS: agent pracuje';
+  if (agent?.connected === true) {
+    return agent.chatLinked ? 'BastillaOS: połączony' : 'BastillaOS: tylko zadania';
+  }
+  const reason = response?.link?.reason;
+  if (reason === 'not_configured' || !response?.registryConfigured) return 'BastillaOS: niepodłączony';
+  if (reason === 'source_rejected_token') return 'BastillaOS: zły token';
+  if (reason === 'source_offline') return 'BastillaOS: offline';
+  if (reason === 'no_agents_advertised') return 'BastillaOS: workery wyłączone';
+  return 'BastillaOS: brak połączenia';
+}
+
 // Facts reported by the API: no role, own model, own memory, own worker.
 export function agentIndependenceLabel(agent) {
+  if (agent?.connection === 'original_bastillaos') {
+    return `Prawdziwy agent · BastillaOS${agent.worker === 'running' ? ' · pracuje sam' : ''}`;
+  }
   if (!agent?.modelConfigured) return 'Bez roli · brak modelu';
   const model = agent.dedicatedModel ? `własny model ${agent.model}` : `model ${agent.model}`;
   return `Bez roli · ${model}${agent.worker === 'running' ? ' · pracuje sam' : ''}`;
@@ -1599,7 +1613,9 @@ function bindChatForm() {
         recordHistory(responseSessionId, userMessage);
       }
       message.value = '';
-      feedback.textContent = responseSource === 'ollama'
+      feedback.textContent = responseSource === 'original_agent'
+        ? 'Odpowiedź Twojego prawdziwego agenta z AI_Studio_BastillaOS.'
+        : responseSource === 'ollama'
         ? 'Odpowiedź lokalnej Ollamy · agent pamięta tę rozmowę (w pamięci procesu API).'
         : responseSource === 'model_provider'
           ? 'Odpowiedź modelu agenta · agent pamięta tę rozmowę (w pamięci procesu API).'

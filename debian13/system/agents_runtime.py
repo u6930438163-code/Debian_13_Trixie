@@ -13,7 +13,8 @@ Independence here means, concretely and verifiably:
   context is never shown to another agent. Memory lives in this process only
   (not on disk) and expires after inactivity.
 * **Own work.** The optional :class:`AgentWorker` hands each queued Work task to
-  the agent it is assigned to, using that agent's model, and records the
+  the agent it is assigned to — the real agent in AI_Studio_BastillaOS when that
+  link is configured, otherwise the agent's own local model — and records the
   model's actual answer. It never executes shell commands, edits files, grants
   root, calls GitHub or makes purchases: the agent's output is text that the
   operator reviews.
@@ -144,7 +145,7 @@ class AgentWorker:
     queue, so nothing is ever reported as done without a real model answer.
     """
 
-    def __init__(self, store, complete: Callable[[str, str], tuple[str, str]],
+    def __init__(self, store, complete: Callable[[dict], tuple[str, str]],
                  ready_agents: Callable[[], set[str]],
                  interval_seconds: float = 5.0):
         self._store = store
@@ -169,7 +170,9 @@ class AgentWorker:
         with self._lock:
             self._state["currentTask"] = task["id"]
         try:
-            reply, model = self._complete(task["agent"], task_message(task))
+            # The callable decides where the agent lives: the real BastillaOS
+            # agent when linked, otherwise the agent's own local model.
+            reply, model = self._complete(task)
         except Exception as exc:  # provider failures are recorded, never faked
             code = getattr(exc, "code", "agent_model_failed")
             self._store.fail_task(task["id"], str(code)[:64])

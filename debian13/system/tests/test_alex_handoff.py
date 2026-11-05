@@ -52,7 +52,7 @@ class OriginalAlexDouble(BaseHTTPRequestHandler):
             "agent": "Alex",
             "sourceRepository": "u6930438163-code/AI_Studio_BastillaOS",
             "protocolVersion": 1,
-            "capabilities": ["debian13_issue_to_pr"],
+            "capabilities": ["debian13_review_task_v1"],
         })
 
     def do_POST(self):
@@ -68,7 +68,7 @@ class OriginalAlexDouble(BaseHTTPRequestHandler):
         self._respond(202, {
             "accepted": type(self).accepted,
             "agent": "Alex",
-            "capability": "debian13_issue_to_pr",
+            "capability": "debian13_review_task_v1",
             "taskId": "alex-original-task-123",
         })
 

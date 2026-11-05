@@ -194,7 +194,7 @@ class AgentWorkerTests(unittest.TestCase):
 
     def test_task_is_done_by_its_own_agent_and_answer_recorded(self):
         seen = []
-        worker = self.make_worker(lambda agent, text: (seen.append((agent, text)) or ("Wnioski.", "astyria-model")),
+        worker = self.make_worker(lambda task: (seen.append((task["agent"], task_message(task))) or ("Wnioski.", "astyria-model")),
                                   {"astyria"})
         task = self.store.create_task("research", "astyria", "Zbadaj dysk", "Podaj wnioski.")
         self.assertTrue(worker.run_once())
@@ -233,7 +233,7 @@ class AgentWorkerTests(unittest.TestCase):
 
     def test_background_worker_processes_queue_without_operator(self):
         task = self.store.create_task("research", "aria", "Sam", "Działaj.")
-        worker = AgentWorker(self.store, complete=lambda a, t: ("OK", "m"),
+        worker = AgentWorker(self.store, complete=lambda task: ("OK", "m"),
                              ready_agents=lambda: {"aria"}, interval_seconds=0.2)
         try:
             deadline = time.time() + 5

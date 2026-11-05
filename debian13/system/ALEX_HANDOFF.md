@@ -26,7 +26,7 @@ wykonanie polecenia właściciela.
   "sourceRepository": "u6930438163-code/AI_Studio_BastillaOS",
   "agent": "Alex",
   "protocolVersion": 1,
-  "capabilities": ["debian13_issue_to_pr"]
+  "capabilities": ["debian13_review_task_v1"]
 }
 ```
 
@@ -39,7 +39,7 @@ musi odpowiedzieć:
 {
   "accepted": true,
   "agent": "Alex",
-  "capability": "debian13_issue_to_pr",
+  "capability": "debian13_review_task_v1",
   "taskId": "oryginalne-id-zadania"
 }
 ```

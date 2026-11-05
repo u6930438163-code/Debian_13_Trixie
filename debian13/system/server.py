@@ -32,7 +32,8 @@ import system_observability as observability
 from agent_monitor import AgentMonitor
 from ai_bridge import BridgeError, execute_bridge_session, terminate_session
 from agents_runtime import (AgentWorker, ConversationStore, SessionAgentMismatch,
-                            load_agent_providers, resolve_provider)
+                            load_agent_providers, resolve_provider, task_message)
+import original_link
 
 MAX_BODY_BYTES = 16 * 1024
 MAX_VISION_BODY_BYTES = 3 * 1024 * 1024
@@ -407,6 +408,8 @@ class Debian13Server(http.server.ThreadingHTTPServer):
         self._rates_lock = threading.Lock()
         self.agent_monitor = None
         self.agent_worker = None
+        self._original_lock = threading.Lock()
+        self._original_cache: tuple[float, dict] | None = None
         # One conversation belongs to one agent; contexts are never shared.
         self.conversations = ConversationStore()
         super().__init__(address, SystemHandler)
@@ -416,14 +419,51 @@ class Debian13Server(http.server.ThreadingHTTPServer):
         if config.get("agent_worker_enabled", False):
             self.agent_worker = AgentWorker(
                 self.work_store,
-                complete=lambda agent, text: complete_chat(agent, text, self.config),
+                complete=self.run_agent_task,
                 ready_agents=self.worker_agents,
                 interval_seconds=config.get("agent_worker_interval", 5),
             )
 
+    # ---- The owner's real agents in AI_Studio_BastillaOS ----
+
+    def original_capabilities(self, max_age: float = 60.0) -> dict:
+        """Cached capability probe; an unreachable source simply means 'not linked'."""
+        now = time.monotonic()
+        with self._original_lock:
+            cached = self._original_cache
+            if cached and now - cached[0] < max_age:
+                return cached[1]
+        try:
+            caps = original_link.capabilities()
+            caps["reachable"] = caps.get("configured", False)
+            caps["reason"] = "linked" if caps.get("agents") else "no_agents_advertised"
+        except original_link.OriginalLinkError as exc:
+            caps = {"configured": True, "reachable": False, "chat": False, "tasks": False,
+                    "agents": [], "reason": exc.code}
+        if not caps.get("configured"):
+            caps["reason"] = "not_configured"
+        with self._original_lock:
+            self._original_cache = (now, caps)
+        return caps
+
+    def original_serves(self, agent: str, feature: str) -> bool:
+        caps = self.original_capabilities()
+        return bool(caps.get(feature)) and agent in caps.get("agents", [])
+
+    def run_agent_task(self, task: dict) -> tuple[str, str]:
+        """A Work task goes to the real agent when linked, else to the agent's local model."""
+        if self.original_serves(task["agent"], "tasks"):
+            job_id = original_link.submit_task(task["agent"], task)
+            return original_link.wait_for_reply(
+                job_id, timeout_seconds=self.config.get("original_task_timeout", 600), poll_seconds=5)
+        return complete_chat(task["agent"], task_message(task), self.config)
+
     def worker_agents(self) -> set[str]:
-        """Agents the local worker may serve right now."""
+        """Agents the worker may serve right now (real link or local model)."""
         agents = ready_agents(self.config)
+        caps = self.original_capabilities()
+        if caps.get("tasks"):
+            agents |= set(caps.get("agents", []))
         # With remote dispatch enabled, Alex's tasks belong to the original Alex.
         if os.environ.get("ALEX_ALLOW_TASK_DISPATCH") == "1":
             agents.discard("alex")
@@ -484,6 +524,47 @@ class SystemHandler(http.server.BaseHTTPRequestHandler):
         self.send_header("X-Content-Type-Options", "nosniff")
         self.end_headers()
         self.wfile.write(body)
+
+    def _send_original_chat(self, profile: str, message: str, session_id: str) -> None:
+        """Forward the operator's words to the REAL agent in BastillaOS and relay its reply."""
+        try:
+            job_id = original_link.send_message(profile, message, key=str(uuid.uuid4()))
+        except original_link.OriginalLinkError as exc:
+            status = 400 if exc.code == "message_too_long" else 502
+            raise ApiError(status, exc.code, str(exc)) from exc
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+        self.send_header("Cache-Control", "no-cache, no-store")
+        self.send_header("X-Accel-Buffering", "no")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("Connection", "close")
+        self.end_headers()
+        self.close_connection = True
+
+        def emit(name: str, payload: dict) -> None:
+            frame = "event: " + name + "\n" + "data: " + json.dumps(payload, ensure_ascii=False) + "\n\n"
+            self.wfile.write(frame.encode("utf-8"))
+            self.wfile.flush()
+
+        try:
+            emit("meta", {"model": "original_agent", "session_id": session_id, "task_id": None,
+                          "session_persisted": False, "source": "original_agent", "jobId": job_id})
+            reply, model = original_link.wait_for_reply(
+                job_id, timeout_seconds=self.server.config.get("original_chat_timeout", 105))
+            try:
+                self.server.conversations.append(session_id, profile, message, reply, model, "original_agent")
+            except SessionAgentMismatch:
+                pass
+            emit("delta", {"text": reply})
+            emit("done", {"agent": profile, "source": "original_agent", "model": model,
+                          "session_id": session_id})
+        except original_link.OriginalLinkError as exc:
+            try:
+                emit("error", {"error": "Prawdziwy agent nie odpowiedział: " + exc.code, "code": exc.code})
+            except OSError:
+                pass
+        except OSError:
+            pass
 
     def _send_terminal_stream(self, command: str) -> None:
         # Validate BEFORE sending SSE headers so invalid commands retain HTTP errors.
@@ -637,7 +718,27 @@ class SystemHandler(http.server.BaseHTTPRequestHandler):
                 self._send_json(200, {"sessionId": match.group(1), "persisted": False, **transcript})
             return
         if self.path == "/api/v1/original-agents":
-            self._send_json(200, original_agents_report())
+            report = original_agents_report()
+            caps = self.server.original_capabilities()
+            states = {}
+            if caps.get("agents"):
+                try:
+                    states = original_link.workers()["agents"]
+                except original_link.OriginalLinkError:
+                    states = {}
+            report["link"] = {"protocol": "bastillaos-debian13-v1", "reason": caps.get("reason"),
+                              "chat": bool(caps.get("chat")), "tasks": bool(caps.get("tasks"))}
+            for entry in report["agents"]:
+                served = entry["id"] in caps.get("agents", [])
+                entry["connected"] = served and bool(caps.get("chat") or caps.get("tasks"))
+                entry["chatLinked"] = served and bool(caps.get("chat"))
+                entry["tasksLinked"] = served and bool(caps.get("tasks"))
+                worker = states.get(entry["id"], {})
+                entry["workerState"] = worker.get("state")
+                entry["workerVerified"] = worker.get("workerVerified") is True
+                entry["completedInSource"] = worker.get("completed", 0)
+            report["originalAgentExecutionVerified"] = any(a["workerVerified"] for a in report["agents"])
+            self._send_json(200, report)
             return
         if self.path == "/api/v1/agents":
             agents = []
@@ -655,6 +756,9 @@ class SystemHandler(http.server.BaseHTTPRequestHandler):
                     "modelConfigured": provider["configured"],
                     "dedicatedModel": provider["dedicated"],
                     "memory": "own_conversations_in_process",
+                    # "original_bastillaos" = the owner's real agent answers.
+                    "connection": "original_bastillaos" if self.server.original_serves(key, "chat")
+                    else "local_model" if provider["configured"] else "none",
                 })
             self._send_json(200, {"agents": agents})
             return
@@ -882,6 +986,9 @@ class SystemHandler(http.server.BaseHTTPRequestHandler):
                     except SessionAgentMismatch:
                         raise ApiError(409, "session_agent_mismatch",
                                        "This conversation belongs to another agent; start a new chat.") from None
+                    if self.server.original_serves(profile, "chat"):
+                        self._send_original_chat(profile, message.strip(), session_id)
+                        return
                     content, model = complete_chat(profile, message.strip(), self.server.config,
                                                    history=history)
                     source = provider_source(resolve_provider(profile, self.server.config)["chat_url"])

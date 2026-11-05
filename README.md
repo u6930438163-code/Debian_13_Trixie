@@ -60,6 +60,37 @@ z Docker Compose + Ollama poprzez `bash debian13/start-ai-session.sh`;
 domyślny model Vision 11B wymaga znaczącej pamięci. Szczegóły w
 [`debian13/README.md`](debian13/README.md).
 
+## Podłączenie Twoich prawdziwych agentów z AI_Studio_BastillaOS
+
+Aria, Alex, Astyria i Aurelius „żyją” w projekcie `u6930438163-code/AI_Studio_BastillaOS`
+(łańcuch modeli Gemini → xAI → Ollama i ich własne misje). Debian 13 łączy się z nimi
+protokołem `bastillaos-debian13-v1` (`/api/agent-tasks/capabilities|workers|messages|submit|jobs/<id>`):
+czat i zadania Work trafiają do prawdziwego agenta, a Debian 13 pokazuje jego zapisaną odpowiedź.
+
+**1. Po stronie BastillaOS** (sekrety wdrożenia, np. AI Studio → Secrets):
+```bash
+DEBIAN13_ORIGINAL_WORKERS_ENABLED=1
+DEBIAN13_ORIGINAL_AGENTS_TOKEN="<losowy sekret, min. 32 znaki>"
+GEMINI_API_KEY=...            # lub XAI_API_KEY / Ollama — co najmniej jeden model
+```
+
+**2. Po stronie Debiana 13** (ten sam sekret):
+```bash
+export ALEX_EXISTING_API_URL="https://TWOJ-ADRES-BASTILLAOS/api"   # musi kończyć się na /api
+export BASTILLA_AGENTS_TOKEN="<ten sam sekret>"                    # lub ALEX_EXISTING_API_TOKEN
+bash debian13/start-local.sh
+```
+
+Gdy połączenie działa, kafelki agentów pokazują „Prawdziwy agent · BastillaOS” i
+„BastillaOS: połączony”, a odpowiedzi w czacie mają źródło `original_agent`.
+Jeśli BastillaOS jest niedostępny, kafelek mówi to wprost (`offline`, `zły token`,
+`workery wyłączone`) — żadna odpowiedź nie jest podstawiana lokalnie. Bez połączenia
+agenci korzystają z lokalnego modelu opisanego niżej (o ile jest skonfigurowany).
+
+Ograniczenia protokołu po stronie BastillaOS: wiadomość do 2000 znaków, tryb
+`model_review_only` (agent odpowiada tekstem, nie wykonuje poleceń), brak pamięci
+rozmowy w tym kanale; odpowiedź pojawia się po kilku–kilkudziesięciu sekundach.
+
 ## Niezależni agenci: bez ról, bez skryptów
 
 Aria, Astyria, Aurelius i Alex działają niezależnie, zarówno na czacie, jak i w systemie:

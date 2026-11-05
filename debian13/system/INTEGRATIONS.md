@@ -148,7 +148,7 @@ Dispatch is optional and requires explicit operator action; it targets
 `u6930438163-code/Debian_13_Trixie` and can only request a PR proposal,
 never a purchase or automatic merge. The legacy target
 `mmitek515-netizen/Debian_13` is no longer used. The remote API must
-advertise the `debian13_issue_to_pr` capability; without it the handoff
+advertise the `debian13_review_task_v1` capability; without it the handoff
 remains disabled and honest status is reported.
 
 ## 4. Codex / GitHub Actions

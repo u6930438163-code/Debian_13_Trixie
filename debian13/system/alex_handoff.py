@@ -14,7 +14,8 @@ import urllib.request
 from alex_bridge import NoRedirect, SOURCE_REPO, existing_api_base
 
 TARGET_REPO = "u6930438163-code/Debian_13_Trixie"
-CAPABILITY = "debian13_issue_to_pr"
+# Protocol v1 as implemented by AI_Studio_BastillaOS (debian13OriginalTaskService.mjs).
+CAPABILITY = "debian13_review_task_v1"
 MAX_RESPONSE_BYTES = 16384
 
 
