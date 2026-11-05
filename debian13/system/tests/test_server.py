@@ -186,7 +186,7 @@ class Debian13ApiTests(unittest.TestCase):
             self.assertIn('"text": "Real test-provider response."', events)
             self.assertIn('event: done\n', events)
             self.assertIn('"session_persisted": false', events)
-            self.assertEqual(provider.body["messages"][1]["content"], "Write tests")
+            self.assertEqual(provider.body["messages"][0]["content"], "Write tests")
         finally:
             provider.shutdown()
             provider.server_close()
@@ -211,7 +211,7 @@ class Debian13ApiTests(unittest.TestCase):
             self.assertEqual(status, 200)
             self.assertEqual(result["model"], "llama3.2-vision:11b")
             self.assertEqual(provider.body["model"], "llama3.2-vision:11b")
-            segments = provider.body["messages"][1]["content"]
+            segments = provider.body["messages"][0]["content"]
             self.assertEqual(segments[0]["text"], "Describe this image.")
             self.assertTrue(segments[1]["image_url"]["url"].startswith("data:image/png;base64,"))
             status, data = self.request_json("POST", "/v1/vision", {
