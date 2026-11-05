@@ -1,0 +1,178 @@
+#!/usr/bin/env python3
+"""Interaktywny skrypt zatwierdzania poleceń root (bin/root-approve).
+
+Przeszukuje katalog zadań oczekujących (~/.local/state/debian-trixie-mcp/pending),
+wyświetla dokładną treść komendy i pyta operatora o potwierdzenie [y/N/r/q].
+Po potwierdzeniu uruchamia polecenie przez sudo (które pyta o hasło użytkownika)
+i zapisuje wynik do katalogu results/, skąd AI może go odebrać przez root_result(id).
+"""
+from __future__ import annotations
+
+import getpass
+import json
+import os
+import subprocess
+import sys
+import time
+from datetime import datetime, timezone
+from pathlib import Path
+
+
+def get_paths() -> tuple[Path, Path, Path]:
+    custom = os.environ.get("MCP_STATE_DIR")
+    if custom:
+        base = Path(custom).expanduser()
+    else:
+        base = Path.home() / ".local" / "state" / "debian-trixie-mcp"
+    pending = base / "pending"
+    results = base / "results"
+    audit = base / "audit.jsonl"
+    pending.mkdir(parents=True, exist_ok=True)
+    results.mkdir(parents=True, exist_ok=True)
+    return pending, results, audit
+
+
+def log_audit(audit_file: Path, task_id: str, command: str, status: str, exit_code: int | None = None, duration: float | None = None):
+    entry = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "event_type": "root_approve_cli",
+        "user": getpass.getuser(),
+        "task_id": task_id,
+        "command": command,
+        "status": status,
+        "exit_code": exit_code,
+        "duration_seconds": round(duration, 3) if duration is not None else None,
+    }
+    try:
+        with audit_file.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+
+
+def main():
+    pending_dir, results_dir, audit_file = get_paths()
+    tasks = sorted(pending_dir.glob("*.json"), key=lambda p: p.stat().st_mtime)
+
+    print("\033[1;36m====================================================================\033[0m")
+    print("\033[1;36m       DEBIAN 13 TRIXIE MCP - PANEL ZATWIERDZANIA POLECEŃ ROOT      \033[0m")
+    print("\033[1;36m====================================================================\033[0m")
+
+    if not tasks:
+        print("\033[1;32mBrak oczekujących poleceń root w kolejce.\033[0m")
+        return 0
+
+    print(f"Liczba zadań oczekujących na zatwierdzenie: \033[1;33m{len(tasks)}\033[0m\n")
+
+    for task_file in tasks:
+        try:
+            data = json.loads(task_file.read_text(encoding="utf-8"))
+        except Exception as err:
+            print(f"\033[1;31mBłąd odczytu pliku {task_file.name}: {err}\033[0m")
+            continue
+
+        task_id = data.get("id", task_file.stem)
+        command = data.get("command", "")
+        created_at = data.get("created_at", "")
+        timeout = data.get("timeout_seconds", 60)
+
+        print("\033[1;34m--------------------------------------------------------------------\033[0m")
+        print(f"\033[1;37mID ZADANIA:\033[0m    \033[1;33m{task_id}\033[0m")
+        print(f"\033[1;37mZGŁOSZONE:\033[0m     {created_at}")
+        print(f"\033[1;37mLIMIT CZASU:\033[0m   {timeout} sekund")
+        print("\033[1;37mPOLECENIE DO WYKONANIA:\033[0m")
+        print(f"\033[1;32m  {command}\033[0m")
+        print("\033[1;34m--------------------------------------------------------------------\033[0m")
+
+        while True:
+            try:
+                choice = input("\033[1mZatwierdzić polecenie root? [y/N/r/q] (y=wykonaj, N=odrzuć, r=szczegóły, q=wyjdź): \033[0m").strip()
+            except (KeyboardInterrupt, EOFError):
+                print("\nPrzerwano przez operatora.")
+                return 1
+
+            if choice in ("q", "Q"):
+                print("Zakończono przeglądanie zadań.")
+                return 0
+
+            elif choice in ("r", "R"):
+                print(json.dumps(data, ensure_ascii=False, indent=2))
+                continue
+
+            elif choice in ("y", "Y"):
+                print("\n\033[1;33m>>> Uruchamianie polecenia przez sudo (podaj hasło użytkownika, jeśli system zapyta)...<<<\033[0m")
+                start_time = time.time()
+                try:
+                    proc = subprocess.run(
+                        ["sudo", "/usr/bin/bash", "-c", command],
+                        capture_output=True,
+                        text=True,
+                        timeout=timeout,
+                    )
+                    duration = time.time() - start_time
+                    out = proc.stdout or ""
+                    err = proc.stderr or ""
+                    code = proc.returncode
+
+                    result_record = {
+                        "id": task_id,
+                        "status": "completed",
+                        "approved_by": getpass.getuser(),
+                        "approved_at": datetime.now(timezone.utc).isoformat(),
+                        "exit_code": code,
+                        "stdout": out,
+                        "stderr": err,
+                        "duration_seconds": round(duration, 3),
+                        "command": command,
+                    }
+                    (results_dir / f"{task_id}.json").write_text(json.dumps(result_record, ensure_ascii=False, indent=2), encoding="utf-8")
+                    task_file.unlink(missing_ok=True)
+                    log_audit(audit_file, task_id, command, "approved_completed", exit_code=code, duration=duration)
+
+                    print(f"\033[1;32m[SUKCES] Wykonano zadanie {task_id} (kod zakończenia: {code}, czas: {duration:.2f}s)\033[0m")
+                    if out:
+                        print("Wyjście (stdout):\n" + out.strip()[:2000])
+                    if err:
+                        print("Błędy (stderr):\n" + err.strip()[:2000])
+                    break
+
+                except subprocess.TimeoutExpired:
+                    duration = time.time() - start_time
+                    result_record = {
+                        "id": task_id,
+                        "status": "timeout",
+                        "approved_by": getpass.getuser(),
+                        "error": f"Przekroczono limit czasu {timeout}s",
+                        "command": command,
+                    }
+                    (results_dir / f"{task_id}.json").write_text(json.dumps(result_record, ensure_ascii=False, indent=2), encoding="utf-8")
+                    task_file.unlink(missing_ok=True)
+                    log_audit(audit_file, task_id, command, "approved_timeout", duration=duration)
+                    print(f"\033[1;31m[TIMEOUT] Przekroczono limit czasu ({timeout}s).\033[0m")
+                    break
+                except Exception as exc:
+                    print(f"\033[1;31mBłąd wykonania sudo: {exc}\033[0m")
+                    break
+
+            else:
+                # Odrzucenie (N lub domyślny enter)
+                result_record = {
+                    "id": task_id,
+                    "status": "rejected",
+                    "rejected_by": getpass.getuser(),
+                    "rejected_at": datetime.now(timezone.utc).isoformat(),
+                    "command": command,
+                    "message": "Polecenie zostało odrzucone przez operatora w terminalu.",
+                }
+                (results_dir / f"{task_id}.json").write_text(json.dumps(result_record, ensure_ascii=False, indent=2), encoding="utf-8")
+                task_file.unlink(missing_ok=True)
+                log_audit(audit_file, task_id, command, "rejected")
+                print(f"\033[1;33m[ODRZUCONO] Polecenie {task_id} zostało odrzucone.\033[0m\n")
+                break
+
+    print("\n\033[1;32mWszystkie oczekujące zadania zostały przetworzone.\033[0m")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -1026,6 +1026,12 @@ h2 {
   font-size: 9px;
 }
 
+:root[data-current-view="chat"] .footer,
+.app-layout:has(#chat-view:not([hidden])) ~ .footer,
+.main-content:has(#chat-view:not([hidden])) .footer {
+  display: none !important;
+}
+
 .sidebar-backdrop {
   display: none;
 }
@@ -1794,36 +1800,50 @@ body::before {
   .main-content {
     min-height:0 !important; height:100% !important; overflow:hidden !important;
   }
+  :root[data-current-view="chat"] .footer,
+  .app-layout:has(#chat-view:not([hidden])) ~ .footer,
+  .main-content:has(#chat-view:not([hidden])) .footer {
+    display: none !important;
+  }
   .view-intro { flex:0 0 auto; padding:2px 0 6px; }
   .view-intro h1 { font-size:17px; }
+  :root[data-current-view="chat"] .view-intro { padding:2px 0 4px !important; }
+  :root[data-current-view="chat"] .view-intro .eyebrow,
+  :root[data-current-view="chat"] .view-intro p { display:none !important; }
+  :root[data-current-view="chat"] .view-intro h1 { font-size:15px !important; margin:0 0 2px !important; }
   .view-switch { margin:1px 0 0; }
   .workspace-view { min-height:0 !important; overflow-y:auto !important; flex:1; padding:10px; }
+  #chat-view.workspace-view,
   .chat-view {
-    height:auto !important; overflow:hidden !important; padding:9px;
-    display:flex; flex-direction:column; gap:7px;
+    height:100% !important; max-height:100% !important; min-height:0 !important;
+    flex:1 1 auto !important; overflow:hidden !important; padding:8px 8px 6px !important;
+    display:flex !important; flex-direction:column !important; gap:6px !important;
   }
-  .chat-workspace-heading h2 { font-size:14px; }
-  .chat-workspace-subtitle { font-size:9px; }
-  #new-chat-inline { min-height:35px; padding:0 9px; font-size:11px; }
-  .agent-tiles { grid-template-columns:repeat(4,minmax(0,1fr)); gap:4px; }
-  .agent-tile { min-height:62px; padding:5px 2px; flex-direction:column;gap:2px;text-align:center; }
-  .agent-avatar {width:28px;height:28px;flex:0 0 28px;border-radius:8px;font-size:10px;}
+  .chat-workspace-heading { margin-bottom:2px !important; padding:2px 0 !important; }
+  .chat-workspace-heading .eyebrow { display:none !important; }
+  .chat-workspace-heading h2 { font-size:13px !important; margin:0 !important; }
+  .chat-workspace-subtitle { font-size:9px; margin:2px 0 0 !important; }
+  #new-chat-inline, #chat-focus-toggle { min-height:32px; padding:0 8px; font-size:11px; }
+  .agent-tiles { grid-template-columns:repeat(4,minmax(0,1fr)); gap:4px; margin-bottom:2px; }
+  .agent-tile { min-height:50px; padding:4px 2px; flex-direction:column;gap:2px;text-align:center; }
+  .agent-avatar {width:26px;height:26px;flex:0 0 26px;border-radius:8px;font-size:10px;}
   .agent-tile strong {font-size:10px;}
   .agent-tile small {display:none;}
   .agent-tile em {font-size:8px;max-width:100%; }
   .transcript {
-    height:auto !important; max-height:none !important; min-height:0 !important;
-    flex:1 1 0; padding:10px 7px; overflow-y:auto !important; gap:7px;
+    height:100% !important; max-height:none !important; min-height:160px !important;
+    flex:1 1 0 !important; padding:10px 8px !important; overflow-y:auto !important; gap:7px;
   }
   .transcript-entry { width:100%;padding:9px 11px;margin:3px auto 7px; }
   .transcript-user { width:93%;margin-right:0; }
   .transcript-text {font-size:12.5px;}
-  .composer { position:relative;z-index:1;flex:0 0 auto;margin:0; padding:5px 2px 3px; }
-  .composer textarea {font-size:16px;min-height:46px;max-height:100px; }
-  .form-footer {margin:2px 0; gap:5px; }
+  .composer { position:relative;z-index:1;flex:0 0 auto;margin:0; padding:4px 0 2px; }
+  .composer textarea {font-size:15px;min-height:38px;height:38px;max-height:90px;padding:8px 10px; }
+  .form-footer {margin:2px 0 0; gap:5px; display:flex; align-items:center; justify-content:space-between; }
   .form-feedback {font-size:10px;}
   .vision-attachment {margin:0;}
-  #chat-submit {min-height:40px;}
+  .vision-attachment label {min-height:30px; font-size:11px; padding:0 8px;}
+  #chat-submit {min-height:36px; padding:0 14px;}
   .terminal-view {padding-bottom:24px;}
   .script-controls label {width:100%;}
   .script-controls select,.script-controls input {min-width:100%;}
@@ -2027,19 +2047,118 @@ body::before {
 .theme-astyria { background: linear-gradient(130deg, #050811, #15415e); }
 .theme-astyria i { background: #38bdf8; }
 .chat-heading-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-:root[data-chat-focus="true"] .chat-view .agent-tiles,
-:root[data-chat-focus="true"] .chat-view .chat-workspace-subtitle {
-  display: none;
+
+/* Full screen chat mode ("na cały ekran") */
+:root[data-chat-focus="true"] .topbar {
+  display: none !important;
+}
+:root[data-chat-focus="true"] .view-intro {
+  display: none !important;
+}
+:root[data-chat-focus="true"] .footer {
+  display: none !important;
+}
+:root[data-chat-focus="true"] .sidebar {
+  display: none !important;
+}
+:root[data-chat-focus="true"] .sidebar-backdrop {
+  display: none !important;
+}
+:root[data-chat-focus="true"] .app-shell {
+  padding: 0 !important;
+  margin: 0 !important;
+  height: 100dvh !important;
+  max-height: 100dvh !important;
+  width: 100% !important;
+  overflow: hidden !important;
+}
+:root[data-chat-focus="true"] .app-layout,
+:root[data-chat-focus="true"] .app-layout[data-collapsed="true"] {
+  display: flex !important;
+  flex-direction: column !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  overflow: hidden !important;
+}
+:root[data-chat-focus="true"] .main-content {
+  height: 100% !important;
+  min-height: 0 !important;
+  flex: 1 1 auto !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+}
+:root[data-chat-focus="true"] .workspace-view {
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
 }
 :root[data-chat-focus="true"] .chat-view {
-  padding-top: 10px;
+  height: 100% !important;
+  max-height: 100% !important;
+  min-height: 0 !important;
+  flex: 1 1 auto !important;
+  display: flex !important;
+  flex-direction: column !important;
+  padding: 8px 10px 10px !important;
+  gap: 8px !important;
+  background: var(--surface, #070c18) !important;
+  overflow: hidden !important;
+}
+:root[data-chat-focus="true"] .chat-workspace-heading {
+  flex: 0 0 auto !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  padding: 6px 10px !important;
+  margin-bottom: 2px !important;
+  border-radius: 10px !important;
+  background: rgba(15, 23, 42, 0.85) !important;
+  border: 1px solid var(--border, rgba(56, 189, 248, 0.2)) !important;
+}
+:root[data-chat-focus="true"] .chat-workspace-heading .eyebrow {
+  display: none !important;
+}
+:root[data-chat-focus="true"] .chat-workspace-heading h2 {
+  font-size: 14px !important;
+  margin: 0 !important;
+  color: #f1f5f9 !important;
+}
+:root[data-chat-focus="true"] .chat-workspace-subtitle {
+  display: none !important;
+}
+:root[data-chat-focus="true"] .agent-tiles {
+  display: none !important;
+}
+:root[data-chat-focus="true"] .channel-notice {
+  margin: 0 !important;
+  padding: 6px 10px !important;
 }
 :root[data-chat-focus="true"] .chat-view .transcript {
-  flex: 1 1 auto;
+  flex: 1 1 0 !important;
+  min-height: 0 !important;
+  height: 100% !important;
+  max-height: none !important;
+  overflow-y: auto !important;
+  padding: 12px 14px !important;
+  border-radius: 12px !important;
+  background: rgba(3, 7, 18, 0.96) !important;
+  border: 1px solid var(--border, rgba(56, 189, 248, 0.2)) !important;
+}
+:root[data-chat-focus="true"] .chat-view .composer {
+  flex: 0 0 auto !important;
+  margin-top: auto !important;
+  padding: 4px 0 0 !important;
 }
 :root[data-chat-focus="true"] #chat-focus-toggle {
-  border-color: var(--design-accent, #b8a5ff);
-  background: var(--design-wash, rgba(147, 121, 238, .15));
+  border-color: var(--design-accent, #38bdf8) !important;
+  background: var(--design-wash, rgba(56, 189, 248, 0.15)) !important;
+  color: #ffffff !important;
+  font-weight: 700 !important;
 }
 @media (max-width: 760px) {
   .design-theme-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }

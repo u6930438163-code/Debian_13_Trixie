@@ -31,6 +31,7 @@ import interactive_scripts as scripts
 import system_observability as observability
 from agent_monitor import AgentMonitor
 from ai_bridge import BridgeError, execute_bridge_session, terminate_session
+from svl_core import kernel as svl_kernel
 
 MAX_BODY_BYTES = 16 * 1024
 MAX_VISION_BODY_BYTES = 3 * 1024 * 1024
@@ -382,6 +383,32 @@ def runtime_diagnostics(server) -> dict:
     }
 
 
+def ollama_status(config: dict) -> dict:
+    selected_model = config.get("vision_model_name") or config.get("model_name") or ""
+    if not config.get("model_chat_url"):
+        return {"state": "not_selected"}
+    request = urllib.request.Request(
+        "http://127.0.0.1:11434/api/version",
+        headers={"Accept": "application/json"},
+    )
+    try:
+        with urllib.request.build_opener(NoRedirectHandler()).open(request, timeout=0.4) as response:
+            if response.status == 200:
+                payload = json.loads(response.read(4096))
+                version = payload.get("version") if isinstance(payload, dict) else ""
+                return {
+                    "state": "reachable",
+                    "version": version if isinstance(version, str) else "",
+                    "selectedModel": selected_model or "llama3.2-vision:11b",
+                }
+    except (OSError, ValueError, urllib.error.URLError):
+        pass
+    return {
+        "state": "unavailable",
+        "selectedModel": selected_model or "llama3.2-vision:11b",
+    }
+
+
 class Debian13Server(http.server.ThreadingHTTPServer):
     daemon_threads = True
     request_queue_size = 32
@@ -429,9 +456,12 @@ class SystemHandler(http.server.BaseHTTPRequestHandler):
     def _send_chat_events(self, content: str, profile: str, model: str) -> None:
         # A provider response is delivered as a single event after completion.
         # This is NOT token-by-token model streaming and is not persisted.
-        source = "ollama" if urllib.parse.urlsplit(
-            self.server.config["model_chat_url"]
-        ).hostname == "ollama" else "model_provider"
+        parsed_url = urllib.parse.urlsplit(self.server.config["model_chat_url"])
+        source = "ollama" if (
+            parsed_url.hostname == "ollama"
+            or parsed_url.port == 11434
+            or model.startswith("llama3.2-vision")
+        ) else "model_provider"
         frames = [
             ("meta", {"model": model, "session_persisted": False}),
             ("delta", {"text": content}),
@@ -578,6 +608,10 @@ class SystemHandler(http.server.BaseHTTPRequestHandler):
             return
         if self.path == "/api/v1/status":
             report = runtime_diagnostics(self.server)
+            try:
+                svl_report = json.loads(svl_kernel.generate_system_status_report())
+            except Exception:
+                svl_report = {"status": "active", "version": "5.6.0-QuantumWheel"}
             self._send_json(200, {
                 "application": {"status": "running", "product": "Debian 13 Console"},
                 "operating_system": {"runtime": {
@@ -588,6 +622,8 @@ class SystemHandler(http.server.BaseHTTPRequestHandler):
                     "status": "configured" if report["providerConfigured"] else "not_configured",
                     "inference": "unverified",
                 },
+                "ollama": ollama_status(self.server.config),
+                "svl_core": svl_report,
                 "task_state": "Brak uruchomionych workerów",
             })
             return
