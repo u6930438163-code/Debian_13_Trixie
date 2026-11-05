@@ -307,6 +307,22 @@ function modelStatusLabel(model) {
   return `${label} · ${inference}`;
 }
 
+// Distinguish a checked service from an unverified or unconfigured one.
+// Reachable API does not establish that the selected model is installed or can infer.
+export function ollamaStatusLabel(ollama) {
+  if (!ollama || typeof ollama !== 'object') return 'Stan Ollamy niezweryfikowany';
+  if (ollama.state === 'not_selected') return 'Ollama nie jest skonfigurowana jako dostawca AI';
+  const selected = ollama.selectedModel
+    ? ` · wybrany model: ${ollama.selectedModel} (niezweryfikowany)`
+    : '';
+  if (ollama.state === 'unavailable') return `Ollama skonfigurowana, serwer nie odpowiada${selected}`;
+  if (ollama.state === 'reachable') {
+    const version = ollama.version ? ` (wersja ${ollama.version})` : '';
+    return `Serwer Ollama odpowiada${version}${selected} · inferencja niezweryfikowana`;
+  }
+  return 'Stan Ollamy niezweryfikowany';
+}
+
 function renderRuntimeStatus(status) {
   const application = status.application?.status === 'running'
     ? `${status.application.product ?? 'Aplikacja'} działa`
@@ -319,11 +335,7 @@ function renderRuntimeStatus(status) {
   setText('application-status', application);
   setText('os-status', `${distribution} · ${boot}`);
   setText('model-status', modelStatusLabel(status.model));
-  const ollama = status.ollama;
-  const ollamaText = ollama?.running
-    ? `Działa (${ollama.version}) · ${ollama.active_model || 'qwen2.5:0.5b'} (aktywny)`
-    : 'Usługa Ollama niedostępna lokalnie';
-  setText('ollama-status', ollamaText);
+  setText('ollama-status', ollamaStatusLabel(status.ollama));
   setText('task-storage-status', status.task_state ?? 'Stan pamięci zadań nieznany');
   setText('status-error', '');
   connectionState('connected', 'API dostępne');
