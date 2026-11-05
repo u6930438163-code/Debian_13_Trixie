@@ -24,9 +24,9 @@ services:
     entrypoint: ["/bin/sh", "-ec"]
     command: |
       until OLLAMA_HOST=http://ollama:11434 ollama list >/dev/null 2>&1; do sleep 3; done
-      OLLAMA_HOST=http://ollama:11434 ollama pull "${OLLAMA_MODEL}"
+      OLLAMA_HOST=http://ollama:11434 ollama pull "$${OLLAMA_MODEL}"
     environment:
-      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2-vision:11b}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5-coder:1.5b}
     networks:
       - default
     security_opt:
@@ -40,8 +40,9 @@ services:
     environment:
       MODEL_CHAT_URL: http://ollama:11434/v1/chat/completions
       MODEL_API_KEY: ollama-local-no-remote-secret
-      MODEL_NAME: ${OLLAMA_MODEL:-llama3.2-vision:11b}
-      VISION_MODEL_NAME: ${OLLAMA_VISION_MODEL:-llama3.2-vision:11b}
+      MODEL_NAME: ${OLLAMA_MODEL:-qwen2.5-coder:1.5b}
+      VISION_MODEL_NAME: "${OLLAMA_VISION_MODEL:-}"
       DEBIAN13_ALLOW_INTERNAL_OLLAMA: "1"
 volumes:
   ollama-models:
+

@@ -82,6 +82,7 @@ fi
 
 export WORKSPACE_DIR HOST=127.0.0.1 PORT="$API_PORT"
 export DEBIAN13_API_PORT="$API_PORT" DEBIAN13_UI_PORT="$UI_PORT"
+export DEBIAN13_SYSTEM_API_URL="${DEBIAN13_SYSTEM_API_URL:-http://127.0.0.1:$API_PORT}"
 python3 -u "$ROOT/system/server.py" >"$STATE_DIR/api.log" 2>&1 &
 API_PID=$!
 UI_PID=""
@@ -148,3 +149,4 @@ echo "  Stop with Ctrl+C. In Codespaces use the PRIVATE forwarded port $UI_PORT.
 python3 -u "$ROOT/ui/dev_server.py" &
 UI_PID=$!
 wait "$UI_PID"
+
