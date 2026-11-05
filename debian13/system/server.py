@@ -106,7 +106,13 @@ def validate_provider_url(value: str) -> str:
         or parsed.password
         or parsed.query
         or parsed.fragment
-        or not parsed.path.rstrip("/").endswith("/v1/chat/completions")
+        or not (
+            parsed.path.rstrip("/").endswith("/v1/chat/completions")
+            or (
+                parsed.hostname == "generativelanguage.googleapis.com"
+                and parsed.path.rstrip("/") == "/v1beta/openai/chat/completions"
+            )
+        )
     ):
         raise ValueError("MODEL_CHAT_URL must be an HTTPS chat-completions URL (HTTP is allowed for loopback tests).")
     return value
@@ -885,16 +891,36 @@ def load_config() -> dict:
     token = os.environ.get("DEBIAN13_API_TOKEN", "")
     if len(token) < 32:
         raise SystemExit("DEBIAN13_API_TOKEN must contain at least 32 characters.")
+    custom_url = os.environ.get("MODEL_CHAT_URL", "").strip()
+    custom_key = os.environ.get("MODEL_API_KEY", "")
+    gemini_key = os.environ.get("GEMINI_API_KEY", "")
+    # Gemini is opt-in via its own key. Never send a Gemini key to a
+    # custom MODEL_CHAT_URL; explicitly configured providers take precedence.
+    use_gemini = bool(
+        gemini_key and not any((custom_url, custom_key, os.environ.get("MODEL_NAME", "")))
+    )
+    requested_url = (
+        "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+        if use_gemini else custom_url
+    )
     try:
-        provider_url = validate_provider_url(os.environ.get("MODEL_CHAT_URL", "").strip())
+        provider_url = validate_provider_url(requested_url)
     except ValueError as exc:
         raise SystemExit(str(exc)) from exc
+    model_name = (
+        (os.environ.get("GEMINI_MODEL", "").strip() or "gemini-2.5-flash")
+        if use_gemini else os.environ.get("MODEL_NAME", "")
+    )
+    vision_model_name = os.environ.get("VISION_MODEL_NAME", "") or (
+        (os.environ.get("GEMINI_VISION_MODEL", "").strip() or model_name)
+        if use_gemini else ""
+    )
     return {
         "api_token": token,
         "model_chat_url": provider_url,
-        "model_api_key": os.environ.get("MODEL_API_KEY", ""),
-        "model_name": os.environ.get("MODEL_NAME", ""),
-        "vision_model_name": os.environ.get("VISION_MODEL_NAME", ""),
+        "model_api_key": gemini_key if use_gemini else custom_key,
+        "model_name": model_name,
+        "vision_model_name": vision_model_name,
         "workspace": os.environ.get("WORKSPACE_DIR", "/workspace"),
         "agent_monitor_enabled": os.environ.get("DEBIAN13_AGENT_MONITOR_ENABLED") == "1",
         "agent_monitor_interval": 30,
