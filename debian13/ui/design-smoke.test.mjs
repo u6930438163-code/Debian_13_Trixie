@@ -115,3 +115,18 @@ test('SVL Hyperspace desktop is the default live Trixie navigation and is not a 
   assert.match(css, /\.hyperspace-hero-grid/);
   assert.equal(normalizeDesignTheme('unknown'), 'hyperspace');
 });
+
+
+test('main-only Hyperspace sync refreshes real runtime views without claiming an AI Studio import', () => {
+  const html = repo('debian13/ui/index.html');
+  const app = repo('debian13/ui/app.mjs');
+  const workflow = repo('.github/workflows/debian13-validation.yml');
+  assert.match(html, /id="sync-system"/);
+  assert.match(html, /id="hyperspace-sync-feedback"/);
+  assert.match(html, /GitHub main → AI Studio: Pull changes/);
+  assert.match(app, /document\.getElementById\('sync-system'\)\?\.addEventListener\('click', synchronizeSystemView\)/);
+  assert.match(app, /loadStatus\(\), loadAgents\(\), loadOriginalAgents\(\), loadIntegrations\(\), refreshWork\(\)/);
+  assert.doesNotMatch(app, /mmitek515-netizen\/Debian_13\/issues\//);
+  assert.doesNotMatch(app, /api\.get\('mcp-info'\)/);
+  assert.match(workflow, /push:\s*\n\s*branches: \[main\]/);
+});

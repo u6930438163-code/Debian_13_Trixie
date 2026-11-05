@@ -596,12 +596,14 @@ async function loadStatus() {
   }
   try {
     renderRuntimeStatus(await api.getStatus());
+    return true;
   } catch (error) {
     connectionState('error', error.status === 401 ? 'Wymagana autoryzacja' : 'Runtime niedostępny');
     for (const id of ['application-status', 'os-status', 'model-status', 'task-storage-status']) {
       setText(id, 'Niedostępny');
     }
     setText('status-error', error.message);
+    return false;
   }
 }
 
@@ -678,11 +680,6 @@ async function loadIntegrations() {
   try {
     const response = await api.getIntegrations();
     if (!Array.isArray(response.integrations)) throw new ApiError('Nieprawidłowa odpowiedź integracji.');
-    const issueUrls = {
-      mcp: 'https://github.com/mmitek515-netizen/Debian_13/issues/4',
-      gpt_actions: 'https://github.com/mmitek515-netizen/Debian_13/issues/5',
-      codex: 'https://github.com/mmitek515-netizen/Debian_13/issues/3',
-    };
     for (const item of response.integrations) {
       const entry = document.createElement('li');
       entry.className = 'agent-card';
@@ -697,14 +694,6 @@ async function loadIntegrations() {
       description.className = 'agent-role';
       description.textContent = item.description;
       entry.append(label, status, description);
-      if (issueUrls[item.id]) {
-        const issue = document.createElement('a');
-        issue.href = issueUrls[item.id];
-        issue.target = '_blank';
-        issue.rel = 'noopener noreferrer';
-        issue.textContent = 'Zgłoszenie GitHub';
-        entry.append(issue);
-      }
       list.append(entry);
     }
     setText('integration-error', '');
@@ -712,20 +701,12 @@ async function loadIntegrations() {
     setText('integration-error', error.message);
   }
 
-  try {
-    const mcpInfo = await api.get('mcp-info');
-    if (mcpInfo) {
-      setText('mcp-public-healthz', mcpInfo.healthzUrl || '/healthz');
-      setText('mcp-public-endpoint', mcpInfo.mcpUrl || '/mcp');
-      setText('mcp-bearer-token', mcpInfo.tokenMasked || '******** (chroniony w sekretach serwera)');
-      const openApiEl = document.getElementById('mcp-openapi-url');
-      if (openApiEl && mcpInfo.openApiUrl) {
-        openApiEl.textContent = mcpInfo.openApiUrl;
-      }
-    }
-  } catch {
-    setText('mcp-bearer-token', '******** (wymaga autoryzacji sesji)');
-  }
+  // Endpoint MCP is provided by the gateway, but its remote connectivity is
+  // not inferred from a local path. Do not call a non-existent mcp-info API.
+  setText('mcp-public-healthz', '/healthz (na aktualnym serwerze)');
+  setText('mcp-public-endpoint', '/mcp (wymaga autoryzacji Bearer)');
+  setText('mcp-bearer-token', 'Sekret operatora pozostaje po stronie serwera.');
+
 }
 
 async function loadTasks() {
@@ -899,7 +880,38 @@ async function cancelWorkTask(taskId, button) {
 }
 
 async function refreshDashboard() {
-  await Promise.all([loadStatus(), loadAgents(), loadOriginalAgents(), loadIntegrations(), loadTasks()]);
+  // A global refresh pulls all runtime views from the real API; it does not
+  // perform a GitHub push or AI Studio import.
+  const [statusOk, , , , workOk] = await Promise.all([
+    loadStatus(), loadAgents(), loadOriginalAgents(), loadIntegrations(), refreshWork(),
+  ]);
+  return statusOk === true && workOk === true;
+}
+
+let systemSyncPending = false;
+async function synchronizeSystemView() {
+  if (systemSyncPending) return;
+  systemSyncPending = true;
+  const button = document.getElementById('sync-system');
+  if (button) {
+    button.disabled = true;
+    button.textContent = '⟳ Odświeżanie…';
+  }
+  setText('hyperspace-sync-feedback', 'Pobieranie statusu, agentów, integracji, zadań i zdarzeń z API…');
+  try {
+    const complete = await refreshDashboard();
+    setText('hyperspace-sync-feedback', complete
+      ? 'Dane API odświeżone. Zmiany kodu z GitHub main pobierzesz osobno w AI Studio → Pull changes.'
+      : 'Odświeżanie niepełne — sprawdź diagnostykę i autoryzację API. GitHub → AI Studio synchronizuj osobno.');
+  } catch (error) {
+    setText('hyperspace-sync-feedback', 'Odświeżanie nieudane: ' + error.message);
+  } finally {
+    systemSyncPending = false;
+    if (button) {
+      button.disabled = false;
+      button.textContent = '⟳ Odśwież dane systemu';
+    }
+  }
 }
 
 async function loadHistory(sessionId) {
@@ -1627,6 +1639,7 @@ if (typeof document !== 'undefined') {
   bindBridgeForm();
   renderHistory();
   document.getElementById('refresh-status')?.addEventListener('click', refreshDashboard);
+  document.getElementById('sync-system')?.addEventListener('click', synchronizeSystemView);
   document.getElementById('refresh-tasks')?.addEventListener('click', refreshWork);
   void refreshDashboard();
   let savedSession = '';

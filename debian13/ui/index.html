@@ -130,7 +130,9 @@
                 <div class="hyperspace-hero-actions">
                   <button class="hyperspace-button is-primary" type="button" data-view="chat">◉ Otwórz czat AI</button>
                   <button class="hyperspace-button" type="button" data-view="terminal">›_ Konsola CLI</button>
+                  <button id="sync-system" class="hyperspace-button" type="button" title="Odświeża dane API; import kodu z GitHub do AI Studio wykonaj osobno">⟳ Odśwież dane systemu</button>
                 </div>
+                <p id="hyperspace-sync-feedback" class="hyperspace-footer-note" role="status" aria-live="polite">Odświeżenie pobiera dane z API. Import kodu z GitHub do AI Studio jest osobną operacją.</p>
               </section>
               <section class="hyperspace-console" aria-label="Skrót do funkcji systemowych">
                 <div class="hyperspace-console-title"><span>◈</span> PULPIT OPERACYJNY</div>
@@ -138,7 +140,7 @@
                 <div class="hyperspace-mini">
                   <div><span>API systemowe</span><strong id="hyperspace-runtime-indicator">Oczekiwanie na pomiar</strong></div>
                   <div><span>Agenci</span><strong>4 profile · workery do weryfikacji</strong></div>
-                  <div><span>Synchronizacja</span><strong>GitHub → po zatwierdzeniu PR</strong></div>
+                  <div><span>Synchronizacja kodu</span><strong>GitHub main → AI Studio: Pull changes</strong></div>
                 </div>
               </section>
             </div>

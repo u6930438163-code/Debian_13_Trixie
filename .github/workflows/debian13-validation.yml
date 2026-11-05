@@ -1,6 +1,19 @@
 name: Debian 13 validation
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'debian13/**'
+      - '.devcontainer/**'
+      - '.github/workflows/debian13-validation.yml'
+      - '.github/workflows/debian13-agent-task.yml'
+      - '.github/workflows/debian13-codex-issue.yml'
+      - '.github/workflows/debian13-scheduled.yml'
+      - 'index.html'
+      - 'server.ts'
+      - 'package.json'
+      - 'vite.config.ts'
   pull_request:
     paths:
       - '.devcontainer/debian13/**'
