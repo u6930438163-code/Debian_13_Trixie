@@ -8,11 +8,12 @@ from __future__ import annotations
 
 from alex_bridge import SOURCE_REPO, existing_api_base, fetch_registry
 
+# Identity registry only; no imposed specialties or behavioral directives.
 ORIGINAL_AGENTS = {
-    "Alex": ("alex", "Architektura i backend"),
-    "Aria": ("aria", "Modele AI, Ollama, MCP"),
-    "Astyria": ("astyria", "GUI i responsywność"),
-    "Aurelius": ("aurelius", "Bezpieczeństwo i testy"),
+    "Alex": "alex",
+    "Aria": "aria",
+    "Astyria": "astyria",
+    "Aurelius": "aurelius",
 }
 
 
@@ -32,7 +33,6 @@ def report() -> dict:
             {
                 "id": slug,
                 "name": name,
-                "role": role,
                 "sourceProfile": f".github/agents/{name}.agent.md",
                 "profileAvailableInDebian13": True,
                 "connected": False,
@@ -40,7 +40,7 @@ def report() -> dict:
                 "tasksInRegistry": 0,
                 "runningEntriesInRegistry": 0,
             }
-            for name, (slug, role) in ORIGINAL_AGENTS.items()
+            for name, slug in ORIGINAL_AGENTS.items()
         ],
     }
     if not configured:
