@@ -914,9 +914,9 @@ def load_config() -> dict:
         (os.environ.get("GEMINI_MODEL", "").strip() or "gemini-3.8-flash")
         if use_gemini else os.environ.get("MODEL_NAME", "")
     )
-    vision_model_name = os.environ.get("VISION_MODEL_NAME", "") or (
+    vision_model_name = (
         (os.environ.get("GEMINI_VISION_MODEL", "").strip() or model_name)
-        if use_gemini else ""
+        if use_gemini else os.environ.get("VISION_MODEL_NAME", "")
     )
     return {
         "api_token": token,
