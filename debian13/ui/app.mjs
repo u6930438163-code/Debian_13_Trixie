@@ -708,6 +708,7 @@ export function originalAgentLinkLabel(agent, response = {}) {
 
 // Facts reported by the API: no role, own model, own memory, own worker.
 export function agentIndependenceLabel(agent) {
+  if (agent?.connection === 'svl_system') return 'Prawdziwy agent · SVL_System';
   if (agent?.connection === 'original_bastillaos') {
     return `Prawdziwy agent · BastillaOS${agent.worker === 'running' ? ' · pracuje sam' : ''}`;
   }
@@ -1155,14 +1156,19 @@ export function reconnectSummary(report) {
   if (report?.Result === 'not_configured') {
     return 'Brak konfiguracji połączenia: ' + (report.Missing ?? []).join('; ');
   }
-  if (report?.Result === 'connected') return `Połączono wszystkich agentów z BastillaOS: ${linked.join(', ')}.`;
-  if (report?.Result === 'partial') return `Połączeni: ${linked.join(', ')}. Pozostali nie są zgłaszani przez BastillaOS.`;
+  const sources = [...new Set(agents.flatMap(([, state]) => state?.via ?? []))];
+  const via = sources.length ? sources.join(' + ') : 'BastillaOS';
+  if (report?.Result === 'connected') return `Połączono wszystkich agentów (${via}): ${linked.join(', ')}.`;
+  if (report?.Result === 'partial') return `Połączeni (${via}): ${linked.join(', ')}. Pozostali nie są zgłaszani przez źródło.`;
   const reasons = {
     source_offline: 'BastillaOS nie odpowiada (offline lub zły adres).',
     source_rejected_token: 'BastillaOS odrzucił token — sprawdź DEBIAN13_ORIGINAL_AGENTS_TOKEN.',
     source_protocol_missing: 'Ten BastillaOS nie ma protokołu Debian 13 (zaktualizuj wdrożenie).',
     source_agents_unavailable: 'BastillaOS nie ma ustawionego tokenu dla Debiana 13.',
     no_agents_advertised: 'BastillaOS działa, ale workery agentów są wyłączone (DEBIAN13_ORIGINAL_WORKERS_ENABLED=1) lub brak modelu.',
+    svl_offline: 'SVL_System nie odpowiada — sprawdź SVL_SYSTEM_URL i czy serwer działa.',
+    svl_no_model: 'SVL_System działa, ale nie ma skonfigurowanego modelu (GEMINI_API_KEY / XAI_API_KEY / Ollama).',
+    invalid_svl_url: 'SVL_SYSTEM_URL musi być adresem HTTPS bez ścieżki (np. https://svl.example).',
   };
   return reasons[report?.Result] ?? 'Nie udało się połączyć: ' + String(report?.Result ?? 'nieznany błąd');
 }
@@ -1655,7 +1661,9 @@ function bindChatForm() {
         recordHistory(responseSessionId, userMessage);
       }
       message.value = '';
-      feedback.textContent = responseSource === 'original_agent'
+      feedback.textContent = responseSource === 'svl_system'
+        ? 'Odpowiedź Twojego agenta z SVL_System (model, bez wykonywania poleceń).'
+        : responseSource === 'original_agent'
         ? 'Odpowiedź Twojego prawdziwego agenta z AI_Studio_BastillaOS.'
         : responseSource === 'ollama'
         ? 'Odpowiedź lokalnej Ollamy · agent pamięta tę rozmowę (w pamięci procesu API).'

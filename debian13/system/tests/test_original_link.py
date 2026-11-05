@@ -98,11 +98,12 @@ class FakeBastilla(BaseHTTPRequestHandler):
 class SvlCoreWithoutConfigurationTests(unittest.TestCase):
     def test_reconnect_lists_exactly_what_is_missing(self):
         from svl_core import SVLSystemKernel
-        with mock.patch.dict(os.environ, {"ALEX_EXISTING_API_URL": "", "BASTILLA_REMOTE_API_URL": "",
+        with mock.patch.dict(os.environ, {"ALEX_EXISTING_API_URL": "", "BASTILLA_REMOTE_API_URL": "", "SVL_SYSTEM_URL": "",
                                           "ALEX_EXISTING_API_TOKEN": "", "BASTILLA_AGENTS_TOKEN": ""}):
             report = SVLSystemKernel().reconnect_agents()
         self.assertEqual(report["Result"], "not_configured")
-        self.assertEqual(len(report["Missing"]), 2)
+        self.assertEqual(len(report["Missing"]), 3)
+        self.assertTrue(report["Missing"][0].startswith("SVL_SYSTEM_URL"))
         self.assertFalse(any(a["connected"] for a in report["Agents"].values()))
 
 

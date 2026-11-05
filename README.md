@@ -60,6 +60,30 @@ z Docker Compose + Ollama poprzez `bash debian13/start-ai-session.sh`;
 domyślny model Vision 11B wymaga znaczącej pamięci. Szczegóły w
 [`debian13/README.md`](debian13/README.md).
 
+## Podłączenie Twoich agentów z SVL_System (czat)
+
+Aria, Alex, Astyria i Aurelius z `mmitek515-netizen/SVL_System` (ich misje, łańcuch
+Gemini → xAI → Ollama i pamięć rozmów w jądrze SVL) odpowiadają w czacie Debiana 13:
+```bash
+export SVL_SYSTEM_URL="https://ADRES-SVL_SYSTEM"   # sam adres, bez ścieżki; lokalnie: http://127.0.0.1:3000
+bash debian13/start-local.sh
+python3 debian13/system/svl_core.py --reconnect   # Result: connected, via SVL_System
+```
+SVL_System musi mieć skonfigurowany model (`GEMINI_API_KEY`, `XAI_API_KEY` lub Ollamę).
+Kafelki pokazują wtedy „Prawdziwy agent · SVL_System”, a odpowiedzi mają źródło `svl_system`
+i silnik `dostawca:model`.
+
+**Bezpieczeństwo (sprawdzone na kodzie i uruchomionym serwerze SVL_System):**
+`POST /api/triad/message` w SVL_System **nie ma uwierzytelnienia**, a wiadomość zaczynająca
+się od `/exec`, `!`, `/propose|/approve` lub słowa `status/root/sudo/sync/…` jest
+**wykonywana na serwerze SVL jako polecenie powłoki/jądra**. Dlatego Debian 13:
+- dodaje do każdej wiadomości prefiks `@model ` (SVL go usuwa przed modelem) — polecenia
+  docierają do agenta jako zwykły tekst i nigdy nie są wykonywane;
+- odrzuca odpowiedzi bez modelu (`without_nlp`, szablony Best-Fit) zamiast je pokazywać;
+- przekazuje do SVL **tylko Twój czat** — zadania Work, MCP i GPT Actions nigdy tam nie trafiają.
+Sam serwer SVL_System pozostaje otwarty dla każdego, kto zna jego adres: nie publikuj go
+bez uwierzytelnienia (np. proxy z hasłem — token podasz w `SVL_SYSTEM_TOKEN`).
+
 ## Podłączenie Twoich prawdziwych agentów z AI_Studio_BastillaOS
 
 Aria, Alex, Astyria i Aurelius „żyją” w projekcie `u6930438163-code/AI_Studio_BastillaOS`

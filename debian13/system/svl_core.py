@@ -107,14 +107,41 @@ class SVLSystemKernel:
         })
 
     def reconnect_agents(self) -> dict:
-        """Ponownie łączy Arię, Alexa, Astyrię i Aureliusa z AI_Studio_BastillaOS.
+        """Ponownie łączy Arię, Alexa, Astyrię i Aureliusa z ich prawdziwymi źródłami.
 
-        Odpytuje prawdziwe API BastillaOS (protokół v1: capabilities + workers).
-        Agent jest "połączony" tylko wtedy, gdy BastillaOS sam go zgłasza
-        i oferuje dla niego czat lub zadania. Nic nie jest zakładane z góry.
+        * SVL_System (mmitek515-netizen/SVL_System) — czat operatora, ``SVL_SYSTEM_URL``.
+        * AI_Studio_BastillaOS — czat i zadania Work, protokół v1
+          (``ALEX_EXISTING_API_URL`` + ``BASTILLA_AGENTS_TOKEN``).
+
+        Agent jest "połączony" tylko wtedy, gdy źródło faktycznie odpowiada
+        i ma skonfigurowany model. Nic nie jest zakładane z góry.
         """
-        import original_link  # lokalny moduł Debian 13; import tu, by CLI działało samodzielnie
+        import original_link  # lokalne moduły Debian 13; import tu, by CLI działało samodzielnie
+        import svl_link
 
+        report = {"Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                  "Sources": {}, "Missing": [],
+                  "Agents": {name: {"connected": False, "via": []} for name in AGENT_NAMES}}
+
+        # --- Źródło 1: SVL_System (czat) ---
+        svl = {"configured": False, "reachable": False, "modelConfigured": False, "result": "not_configured"}
+        try:
+            if svl_link.base_url():
+                svl = svl_link.status()
+                svl["result"] = ("connected" if svl.get("modelConfigured") and svl.get("chatProtocol")
+                                 else "svl_no_model")
+        except ValueError as exc:
+            svl["result"] = "invalid_svl_url"
+            report["Missing"].append(str(exc))
+        except svl_link.SvlLinkError as exc:
+            svl = {"configured": True, "reachable": False, "modelConfigured": False, "result": exc.code}
+        report["Sources"]["SVL_System"] = svl
+        if svl["result"] == "connected":
+            for name in AGENT_NAMES:
+                report["Agents"][name].update(connected=True, chat=True)
+                report["Agents"][name]["via"].append("SVL_System")
+
+        # --- Źródło 2: AI_Studio_BastillaOS (czat + zadania) ---
         missing = []
         try:
             if not original_link.existing_api_base():
@@ -123,20 +150,17 @@ class SVLSystemKernel:
             missing.append("ALEX_EXISTING_API_URL musi być adresem HTTPS kończącym się na /api")
         if not original_link.token():
             missing.append("BASTILLA_AGENTS_TOKEN (= DEBIAN13_ORIGINAL_AGENTS_TOKEN w BastillaOS, min. 32 znaki)")
-        report = {"Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                  "Source": "u6930438163-code/AI_Studio_BastillaOS",
-                  "Protocol": "bastillaos-debian13-v1", "Missing": missing,
-                  "Capabilities": {"configured": False, "chat": False, "tasks": False, "agents": []},
-                  "Agents": {name: {"connected": False} for name in AGENT_NAMES}}
-        if missing:
-            report["Result"] = "not_configured"
-            return self._remember(report)
-        try:
-            caps = original_link.capabilities()
-        except original_link.OriginalLinkError as exc:
-            report["Result"] = exc.code
-            return self._remember(report)
+        caps = {"configured": False, "chat": False, "tasks": False, "agents": []}
+        bastilla_result = "not_configured"
+        if not missing:
+            try:
+                caps = original_link.capabilities()
+                bastilla_result = ("connected" if caps.get("agents") and (caps.get("chat") or caps.get("tasks"))
+                                   else "no_agents_advertised")
+            except original_link.OriginalLinkError as exc:
+                bastilla_result = exc.code
         report["Capabilities"] = caps
+        report["Sources"]["AI_Studio_BastillaOS"] = {"result": bastilla_result, "missing": missing, **caps}
         states = {}
         if caps.get("agents"):
             try:
@@ -146,17 +170,29 @@ class SVLSystemKernel:
         for name in AGENT_NAMES:
             slug = name.lower()
             served = slug in caps.get("agents", [])
-            worker = states.get(slug, {})
-            report["Agents"][name] = {
-                "connected": served and bool(caps.get("chat") or caps.get("tasks")),
-                "chat": served and bool(caps.get("chat")),
-                "tasks": served and bool(caps.get("tasks")),
-                "workerState": worker.get("state"),
-                "completedInSource": worker.get("completed", 0),
-            }
+            entry = report["Agents"][name]
+            if served and (caps.get("chat") or caps.get("tasks")):
+                entry["connected"] = True
+                entry["via"].append("AI_Studio_BastillaOS")
+                entry["chat"] = entry.get("chat", False) or bool(caps.get("chat"))
+                entry["tasks"] = bool(caps.get("tasks"))
+                entry["workerState"] = states.get(slug, {}).get("state")
+            entry.setdefault("chat", False)
+            entry.setdefault("tasks", False)
+
+        if svl["result"] == "not_configured" and bastilla_result == "not_configured":
+            report["Missing"] = ["SVL_SYSTEM_URL (np. https://ADRES-SVL_SYSTEM) — czat z agentami SVL_System",
+                                 *missing]
         connected = sum(a["connected"] for a in report["Agents"].values())
-        report["Result"] = ("connected" if connected == len(AGENT_NAMES)
-                            else "partial" if connected else "no_agents_advertised")
+        if connected == len(AGENT_NAMES):
+            report["Result"] = "connected"
+        elif connected:
+            report["Result"] = "partial"
+        elif report["Missing"] and svl["result"] == "not_configured" and bastilla_result == "not_configured":
+            report["Result"] = "not_configured"
+        else:
+            # Pierwszy konkretny powód z prawdziwego źródła.
+            report["Result"] = next(r for r in (svl["result"], bastilla_result) if r != "not_configured")
         return self._remember(report)
 
     def _remember(self, report: dict) -> dict:

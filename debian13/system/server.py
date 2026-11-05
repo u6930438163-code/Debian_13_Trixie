@@ -34,6 +34,7 @@ from ai_bridge import BridgeError, execute_bridge_session, terminate_session
 from agents_runtime import (AgentWorker, ConversationStore, SessionAgentMismatch,
                             load_agent_providers, resolve_provider, task_message)
 import original_link
+import svl_link
 from svl_core import kernel as svl_kernel
 
 MAX_BODY_BYTES = 16 * 1024
@@ -442,6 +443,7 @@ class Debian13Server(http.server.ThreadingHTTPServer):
         self.agent_worker = None
         self._original_lock = threading.Lock()
         self._original_cache: tuple[float, dict] | None = None
+        self._svl_cache: tuple[float, dict] | None = None
         # One conversation belongs to one agent; contexts are never shared.
         self.conversations = ConversationStore()
         super().__init__(address, SystemHandler)
@@ -478,12 +480,36 @@ class Debian13Server(http.server.ThreadingHTTPServer):
             self._original_cache = (now, caps)
         return caps
 
+    # ---- The owner's agents in SVL_System (operator chat only) ----
+
+    def svl_status(self, max_age: float = 60.0) -> dict:
+        now = time.monotonic()
+        with self._original_lock:
+            cached = self._svl_cache
+            if cached and now - cached[0] < max_age:
+                return cached[1]
+        try:
+            state = svl_link.status()
+            state["reason"] = ("linked" if state.get("modelConfigured") and state.get("chatProtocol")
+                               else "svl_no_model" if state.get("reachable") else "not_configured")
+        except svl_link.SvlLinkError as exc:
+            state = {"configured": True, "reachable": False, "modelConfigured": False, "reason": exc.code}
+        self.store_svl_status(state, now)
+        return state
+
+    def store_svl_status(self, state: dict, stamp: float | None = None) -> None:
+        with self._original_lock:
+            self._svl_cache = (time.monotonic() if stamp is None else stamp, state)
+
+    def svl_chat_available(self) -> bool:
+        return svl_link.configured() and self.svl_status().get("reason") == "linked"
+
     def store_original_capabilities(self, report: dict) -> None:
         """Adopt a fresh SVL Core reconnect result as the current link state."""
         caps = dict(report.get("Capabilities") or {})
-        caps["reason"] = {"connected": "linked", "partial": "linked"}.get(report.get("Result"),
-                                                                       report.get("Result"))
-        caps["reachable"] = report.get("Result") in ("connected", "partial", "no_agents_advertised")
+        result = (report.get("Sources", {}).get("AI_Studio_BastillaOS") or {}).get("result", report.get("Result"))
+        caps["reason"] = "linked" if result == "connected" else result
+        caps["reachable"] = result in ("connected", "no_agents_advertised")
         with self._original_lock:
             self._original_cache = (time.monotonic(), caps)
 
@@ -565,6 +591,48 @@ class SystemHandler(http.server.BaseHTTPRequestHandler):
         self.send_header("X-Content-Type-Options", "nosniff")
         self.end_headers()
         self.wfile.write(body)
+
+    def _start_event_stream(self):
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+        self.send_header("Cache-Control", "no-cache, no-store")
+        self.send_header("X-Accel-Buffering", "no")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("Connection", "close")
+        self.end_headers()
+        self.close_connection = True
+
+        def emit(name: str, payload: dict) -> None:
+            frame = "event: " + name + "\n" + "data: " + json.dumps(payload, ensure_ascii=False) + "\n\n"
+            self.wfile.write(frame.encode("utf-8"))
+            self.wfile.flush()
+        return emit
+
+    def _send_svl_chat(self, profile: str, message: str, session_id: str) -> None:
+        """Operator chat with the REAL agent in SVL_System (model reply only, never commands)."""
+        if len(message) > svl_link.MAX_MESSAGE_CHARS:
+            raise ApiError(400, "message_too_long", "Wiadomość dla SVL_System może mieć do 4000 znaków.")
+        emit = self._start_event_stream()
+        try:
+            emit("meta", {"model": "svl_system", "session_id": session_id, "task_id": None,
+                          "session_persisted": False, "source": "svl_system"})
+            reply, engine = svl_link.chat(profile, message,
+                                          timeout=self.server.config.get("svl_chat_timeout", 110))
+            try:
+                self.server.conversations.append(session_id, profile, message, reply, engine, "svl_system")
+            except SessionAgentMismatch:
+                pass
+            emit("delta", {"text": reply})
+            emit("done", {"agent": profile, "source": "svl_system", "model": engine,
+                          "session_id": session_id})
+        except svl_link.SvlLinkError as exc:
+            try:
+                emit("error", {"error": "Agent SVL_System nie odpowiedział: " + exc.code
+                               + (" — " + str(exc) if str(exc) != exc.code else ""), "code": exc.code})
+            except OSError:
+                pass
+        except OSError:
+            pass
 
     def _send_original_chat(self, profile: str, message: str, session_id: str) -> None:
         """Forward the operator's words to the REAL agent in BastillaOS and relay its reply."""
@@ -804,7 +872,8 @@ class SystemHandler(http.server.BaseHTTPRequestHandler):
                     "dedicatedModel": provider["dedicated"],
                     "memory": "own_conversations_in_process",
                     # "original_bastillaos" = the owner's real agent answers.
-                    "connection": "original_bastillaos" if self.server.original_serves(key, "chat")
+                    "connection": "svl_system" if self.server.svl_chat_available()
+                    else "original_bastillaos" if self.server.original_serves(key, "chat")
                     else "local_model" if provider["configured"] else "none",
                 })
             self._send_json(200, {"agents": agents})
@@ -991,6 +1060,9 @@ class SystemHandler(http.server.BaseHTTPRequestHandler):
                 # The owner's SVL Core re-probes BastillaOS; the result replaces the cache.
                 report = svl_kernel.reconnect_agents()
                 self.server.store_original_capabilities(report)
+                svl = dict(report.get("Sources", {}).get("SVL_System", {}))
+                svl["reason"] = "linked" if svl.get("result") == "connected" else svl.get("result")
+                self.server.store_svl_status(svl)
                 self._send_json(200, report)
                 return
             if self.path == "/api/v1/bridge/terminate":
@@ -1041,6 +1113,9 @@ class SystemHandler(http.server.BaseHTTPRequestHandler):
                     except SessionAgentMismatch:
                         raise ApiError(409, "session_agent_mismatch",
                                        "This conversation belongs to another agent; start a new chat.") from None
+                    if self.server.svl_chat_available():
+                        self._send_svl_chat(profile, message.strip(), session_id)
+                        return
                     if self.server.original_serves(profile, "chat"):
                         self._send_original_chat(profile, message.strip(), session_id)
                         return

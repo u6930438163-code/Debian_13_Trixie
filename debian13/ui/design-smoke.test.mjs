@@ -202,6 +202,7 @@ test('chat keeps every agent conversation separate in the browser', () => {
 
 test('tiles name the real BastillaOS agents only when the API reports a live link', async () => {
   const { originalAgentLinkLabel, agentIndependenceLabel } = await import('./app.mjs');
+  assert.equal(agentIndependenceLabel({ connection: 'svl_system' }), 'Prawdziwy agent · SVL_System');
   assert.equal(agentIndependenceLabel({ connection: 'original_bastillaos', worker: 'running' }),
     'Prawdziwy agent · BastillaOS · pracuje sam');
   assert.equal(originalAgentLinkLabel({ connected: true, chatLinked: true }), 'BastillaOS: połączony');
@@ -217,7 +218,10 @@ test('tiles name the real BastillaOS agents only when the API reports a live lin
 test('SVL Core reconnect results are explained without claiming a link', async () => {
   const { reconnectSummary } = await import('./app.mjs');
   const all = { Result: 'connected', Agents: { Aria: { connected: true }, Alex: { connected: true } } };
-  assert.match(reconnectSummary(all), /Połączono wszystkich agentów z BastillaOS: Aria, Alex/);
+  assert.match(reconnectSummary(all), /Połączono wszystkich agentów \(BastillaOS\): Aria, Alex/);
+  const svl = { Result: 'connected', Agents: { Aria: { connected: true, via: ['SVL_System'] } } };
+  assert.match(reconnectSummary(svl), /\(SVL_System\): Aria/);
+  assert.match(reconnectSummary({ Result: 'svl_no_model' }), /nie ma skonfigurowanego modelu/);
   assert.match(reconnectSummary({ Result: 'not_configured', Missing: ['ALEX_EXISTING_API_URL'] }), /ALEX_EXISTING_API_URL/);
   assert.match(reconnectSummary({ Result: 'source_rejected_token' }), /odrzucił token/);
   assert.match(reconnectSummary({ Result: 'no_agents_advertised' }), /DEBIAN13_ORIGINAL_WORKERS_ENABLED=1/);
