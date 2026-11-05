@@ -162,6 +162,19 @@ class Debian13ApiTests(unittest.TestCase):
         self.assertEqual(status, 503)
         self.assertEqual(data["error"]["code"], "provider_not_configured")
 
+    def test_mobile_gui_chat_stream_fails_closed_without_provider(self):
+        self.connection.request(
+            "POST", "/api/v1/chat/stream",
+            body=json.dumps({"agent": "alex", "message": "Write tests"}),
+            headers={"Authorization": "Bearer " + TOKEN,
+                     "Content-Type": "application/json"},
+        )
+        response = self.connection.getresponse()
+        payload = json.loads(response.read())
+        self.assertEqual(response.status, 503)
+        self.assertEqual(payload["error"]["code"], "provider_not_configured")
+        self.assertTrue(response.getheader("Content-Type").startswith("application/json"))
+
     def test_chat_calls_configured_provider_with_selected_profile(self):
         provider = ThreadingHTTPServer(("127.0.0.1", 0), ProviderHandler)
         provider_thread = threading.Thread(target=provider.serve_forever, daemon=True)
