@@ -278,3 +278,15 @@ test('proxy rejects API query parameters instead of silently dropping them', asy
   assert.deepEqual(await post.json(), { error: 'Parametry URL API nie są obsługiwane.' });
   assert.equal(upstream.requests.length, 0, 'GET and POST query-bearing requests must not reach upstream');
 });
+
+
+test('proxy rejects query parameters on task dispatch without reaching the worker gateway', async (t) => {
+  const upstream = await startUpstreamDouble(t);
+  const base = await startUiProxy(t, upstream.port, 'fixture-only-operator-token');
+  const response = await fetch(`${base}/api/v1/tasks/${TEST_TASK_ID}/dispatch?force=true`, {
+    method: 'POST',
+  });
+  assert.equal(response.status, 400);
+  assert.deepEqual(await response.json(), { error: 'Parametry URL API nie są obsługiwane.' });
+  assert.equal(upstream.requests.length, 0, 'query-bearing dispatch must never reach the upstream gateway');
+});
