@@ -115,3 +115,18 @@ test('SVL Hyperspace desktop is the default live Trixie navigation and is not a 
   assert.match(css, /\.hyperspace-hero-grid/);
   assert.equal(normalizeDesignTheme('unknown'), 'hyperspace');
 });
+
+test('Hyperspace communication dock forwards to the authenticated existing chat, never a mock provider', () => {
+  const html = repo('debian13/ui/index.html');
+  const js = repo('debian13/ui/app.mjs');
+  assert.match(html, /id="hyperspace-chat-launch-form"/);
+  assert.match(html, /id="hyperspace-chat-message"/);
+  assert.match(html, /id="hyperspace-chat-agent"/);
+  assert.match(html, /name="message" type="text" maxlength="4000"/);
+  assert.match(js, /function bindHyperspaceLauncher/);
+  assert.match(js, /fullForm\.requestSubmit\(\)/);
+  assert.match(js, /fullAgent\.dispatchEvent/);
+  assert.match(js, /bindHyperspaceLauncher\(\)/);
+  assert.match(js, /fullMessage\.value = message/);
+  assert.doesNotMatch(js, /hyperspace.*mock-provider/i);
+});
