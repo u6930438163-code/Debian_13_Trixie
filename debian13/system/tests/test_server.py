@@ -6,12 +6,13 @@ import sys
 import tempfile
 import threading
 import unittest
+from unittest.mock import MagicMock, patch
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from server import Debian13Server, validate_provider_url
+from server import Debian13Server, validate_provider_url, probe_ollama
 
 
 TOKEN = "test-token-with-at-least-thirty-two-characters"
@@ -78,6 +79,49 @@ class Debian13ApiTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual([profile["id"] for profile in data["profiles"]], ["aria", "astyria", "aurelius", "alex"])
         self.assertTrue(all(profile["active"] is False for profile in data["profiles"]))
+
+    def test_ollama_status_never_uses_unselected_external_provider(self):
+        with patch("server.urllib.request.build_opener") as opener:
+            self.assertEqual(probe_ollama({"model_chat_url": ""})["state"], "not_selected")
+            self.assertEqual(probe_ollama({
+                "model_chat_url": "https://provider.example/v1/chat/completions",
+            })["state"], "not_selected")
+            opener.assert_not_called()
+
+    def test_ollama_status_reports_reachability_without_claiming_inference(self):
+        reply = MagicMock()
+        reply.__enter__.return_value.read.return_value = b'{"version":"0.11.0"}'
+        opener = MagicMock()
+        opener.open.return_value = reply
+        self.server.config.update({
+            "model_chat_url": "http://ollama:11434/v1/chat/completions",
+            "model_api_key": "local-test-only",
+            "model_name": "qwen2.5-coder:1.5b",
+        })
+        with patch.dict(os.environ, {"DEBIAN13_ALLOW_INTERNAL_OLLAMA": "1"}):
+            with patch("server.urllib.request.build_opener", return_value=opener):
+                status, data = self.request_json("GET", "/api/v1/status")
+        self.assertEqual(status, 200)
+        self.assertEqual(data["ollama"]["state"], "reachable")
+        self.assertEqual(data["ollama"]["version"], "0.11.0")
+        self.assertEqual(data["ollama"]["selectedModel"], "qwen2.5-coder:1.5b")
+        self.assertEqual(data["ollama"]["inference"], "unverified")
+        self.assertEqual(data["model"]["inference"], "unverified")
+        self.assertNotIn("local-test-only", json.dumps(data))
+        self.assertIn("timeout", opener.open.call_args.kwargs)
+        self.assertEqual(opener.open.call_args.kwargs["timeout"], 0.6)
+
+    def test_ollama_status_reports_unavailable_on_probe_error(self):
+        opener = MagicMock()
+        opener.open.side_effect = TimeoutError("model offline")
+        with patch.dict(os.environ, {"DEBIAN13_ALLOW_INTERNAL_OLLAMA": "1"}):
+            with patch("server.urllib.request.build_opener", return_value=opener):
+                result = probe_ollama({
+                    "model_chat_url": "http://ollama:11434/v1/chat/completions",
+                    "model_name": "qwen2.5-coder:1.5b",
+                })
+        self.assertEqual(result["state"], "unavailable")
+        self.assertEqual(result["inference"], "unverified")
 
     def test_diagnostics_are_authenticated_and_do_not_disclose_secrets(self):
         self.assertEqual(self.request_json("GET", "/v1/diagnostics", token=None)[0], 401)
