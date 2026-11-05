@@ -72,7 +72,7 @@ test('hosted Express gateway protects API, GPT Actions, MCP and model inference'
     body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: {} }),
   });
   assert.equal(mcp.status, 200);
-  assert.equal((await mcp.json()).result.serverInfo.name, 'debian13-readonly');
+  assert.equal((await mcp.json()).result.serverInfo.name, 'debian13-work-mcp');
 
   for (const auth of [undefined, 'Bearer ' + token, 'Bearer internal-gemini-token']) {
     const inference = await fetch(url + '/v1/chat/completions', {
