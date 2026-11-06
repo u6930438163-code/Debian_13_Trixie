@@ -176,6 +176,7 @@ class Debian13ApiTests(unittest.TestCase):
             payload = json.loads(response.read())
             self.assertEqual(response.status, 401)
             self.assertEqual(payload["error"]["code"], "unauthorized")
+            self.assertEqual(response.getheader("Connection"), "close")
 
     def test_mobile_gui_chat_stream_fails_closed_without_provider(self):
         self.connection.request(
