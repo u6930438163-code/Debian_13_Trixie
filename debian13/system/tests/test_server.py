@@ -215,7 +215,10 @@ class Debian13ApiTests(unittest.TestCase):
 
     def test_mobile_gui_chat_stream_rejects_invalid_input_before_provider(self):
         for payload, code in (
+            ({"agent": None, "message": "Hello"}, "invalid_profile"),
+            ({"agent": 42, "message": "Hello"}, "invalid_profile"),
             ({"agent": [], "message": "Hello"}, "invalid_profile"),
+            ({"agent": {"name": "aria"}, "message": "Hello"}, "invalid_profile"),
             ({"agent": "unknown", "message": "Hello"}, "invalid_profile"),
             ({"agent": "aria", "message": None}, "invalid_message"),
             ({"agent": "aria", "message": 42}, "invalid_message"),
