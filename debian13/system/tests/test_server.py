@@ -246,19 +246,22 @@ class Debian13ApiTests(unittest.TestCase):
                 "model_api_key": "fixture-provider-key",
                 "model_name": "fixture-model",
             })
-            self.connection.request("POST", "/api/v1/chat/stream",
-                                    body=json.dumps({"agent": "alex", "message": "Write tests"}),
-                                    headers={"Authorization": "Bearer " + TOKEN,
-                                             "Content-Type": "application/json"})
-            reply = self.connection.getresponse()
-            events = reply.read().decode("utf-8")
-            self.assertEqual(reply.status, 200)
-            self.assertTrue(reply.getheader("Content-Type").startswith("text/event-stream"))
-            self.assertIn('event: delta\n', events)
-            self.assertIn('"text": "Real test-provider response."', events)
-            self.assertIn('event: done\n', events)
-            self.assertIn('"session_persisted": false', events)
-            self.assertEqual(provider.body["messages"][0]["content"], "Write tests")
+            for profile in ("alex", "aria", "astyria", "aurelius"):
+                with self.subTest(profile=profile):
+                    self.connection.request("POST", "/api/v1/chat/stream",
+                                            body=json.dumps({"agent": profile, "message": "Write tests"}),
+                                            headers={"Authorization": "Bearer " + TOKEN,
+                                                     "Content-Type": "application/json"})
+                    reply = self.connection.getresponse()
+                    events = reply.read().decode("utf-8")
+                    self.assertEqual(reply.status, 200)
+                    self.assertTrue(reply.getheader("Content-Type").startswith("text/event-stream"))
+                    self.assertIn('event: delta\n', events)
+                    self.assertIn('"text": "Real test-provider response."', events)
+                    self.assertIn('event: done\n', events)
+                    self.assertIn('"session_persisted": false', events)
+                    self.assertIn('"agent": "' + profile + '"', events)
+                    self.assertEqual(provider.body["messages"][0]["content"], "Write tests")
         finally:
             provider.shutdown()
             provider.server_close()
