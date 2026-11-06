@@ -297,6 +297,8 @@ class Debian13ApiTests(unittest.TestCase):
                     events = reply.read().decode("utf-8")
                     self.assertEqual(reply.status, 200)
                     self.assertTrue(reply.getheader("Content-Type").startswith("text/event-stream"))
+                    self.assertEqual(reply.getheader("Cache-Control"), "no-store")
+                    self.assertEqual(reply.getheader("X-Content-Type-Options"), "nosniff")
                     self.assertIn('event: delta\n', events)
                     self.assertIn('"text": "Real test-provider response."', events)
                     self.assertIn('event: done\n', events)
