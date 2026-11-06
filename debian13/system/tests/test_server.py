@@ -162,6 +162,22 @@ class Debian13ApiTests(unittest.TestCase):
         (self.workspace / "outside.txt").symlink_to("/etc/passwd")
         self.assertEqual(self.request_json("POST", "/v1/terminal", {"command": "cat outside.txt"})[0], 403)
 
+    def test_terminal_stream_rejects_workspace_escape_before_sse_headers(self):
+        (self.workspace / "escape.txt").symlink_to("/etc/passwd")
+        for command in ("cat ../../etc/passwd", "cat escape.txt"):
+            with self.subTest(command=command):
+                self.connection.request(
+                    "POST", "/api/v1/terminal/stream",
+                    body=json.dumps({"command": command}),
+                    headers={"Authorization": "Bearer " + TOKEN,
+                             "Content-Type": "application/json"},
+                )
+                response = self.connection.getresponse()
+                payload = json.loads(response.read())
+                self.assertEqual(response.status, 403)
+                self.assertEqual(payload["error"]["code"], "path_outside_workspace")
+                self.assertTrue(response.getheader("Content-Type").startswith("application/json"))
+
     def test_terminal_output_is_bounded(self):
         (self.workspace / "large.txt").write_bytes(b"x" * (1024 * 1024 + 1))
         status, data = self.request_json("POST", "/v1/terminal", {"command": "cat large.txt"})
