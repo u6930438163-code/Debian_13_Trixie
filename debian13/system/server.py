@@ -455,6 +455,8 @@ class SystemHandler(http.server.BaseHTTPRequestHandler):
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
+        if self.close_connection:
+            self.send_header("Connection", "close")
         self.send_header("Cache-Control", "no-store")
         self.send_header("X-Content-Type-Options", "nosniff")
         for name, value in (headers or {}).items():
@@ -515,6 +517,8 @@ class SystemHandler(http.server.BaseHTTPRequestHandler):
         expected = "Bearer " + self.server.config["api_token"]
         supplied = self.headers.get("Authorization", "")
         if not hmac.compare_digest(supplied.encode(), expected.encode()):
+            # A rejected POST body is unread; never parse it as another request.
+            self.close_connection = True
             self._send_json(401, {"error": {
                 "code": "unauthorized",
                 "message": "A valid bearer token is required.",
