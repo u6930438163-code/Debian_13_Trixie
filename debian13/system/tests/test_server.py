@@ -217,18 +217,20 @@ class Debian13ApiTests(unittest.TestCase):
                 "model_api_key": "provider-secret",
                 "model_name": "integration-test-model",
             })
-            status, data = self.request_json("POST", "/v1/chat", {
-                "profile": "aurelius",
-                "message": "Review this test.",
-            })
-            self.assertEqual(status, 200)
-            self.assertEqual(data["content"], "Real test-provider response.")
-            self.assertEqual(data["profile"], "aurelius")
-            self.assertEqual(provider.authorization, "Bearer " + self.server.config["model_api_key"])
-            self.assertEqual(provider.body["messages"], [
-                {"role": "user", "content": "Review this test."},
-            ])
-            self.assertNotIn("system", [m["role"] for m in provider.body["messages"]])
+            for profile in ("alex", "aria", "astyria", "aurelius"):
+                with self.subTest(profile=profile):
+                    status, data = self.request_json("POST", "/v1/chat", {
+                        "profile": profile,
+                        "message": "Review this test.",
+                    })
+                    self.assertEqual(status, 200)
+                    self.assertEqual(data["content"], "Real test-provider response.")
+                    self.assertEqual(data["profile"], profile)
+                    self.assertEqual(provider.authorization, "Bearer " + self.server.config["model_api_key"])
+                    self.assertEqual(provider.body["messages"], [
+                        {"role": "user", "content": "Review this test."},
+                    ])
+                    self.assertNotIn("system", [m["role"] for m in provider.body["messages"]])
         finally:
             provider.shutdown()
             provider.server_close()
