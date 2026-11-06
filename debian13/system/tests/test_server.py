@@ -307,6 +307,10 @@ class Debian13ApiTests(unittest.TestCase):
                     self.assertIn('"session_persisted": false', events)
                     self.assertIn('"agent": "' + profile + '"', events)
                     self.assertEqual(provider.body["messages"][0]["content"], "Write tests")
+                    self.assertEqual(provider.authorization, "Bearer fixture-provider-key")
+                    self.assertEqual(provider.body["messages"], [
+                        {"role": "user", "content": "Write tests"},
+                    ])
         finally:
             provider.shutdown()
             provider.server_close()
