@@ -194,6 +194,27 @@ class Debian13ApiTests(unittest.TestCase):
             self.assertEqual(payload["error"]["code"], "unauthorized")
             self.assertEqual(response.getheader("Connection"), "close")
 
+    def test_mobile_gui_chat_stream_rejects_invalid_input_before_provider(self):
+        for payload, code in (
+            ({"agent": [], "message": "Hello"}, "invalid_profile"),
+            ({"agent": "unknown", "message": "Hello"}, "invalid_profile"),
+            ({"agent": "aria", "message": ""}, "invalid_message"),
+            ({"agent": "aria", "message": " "}, "invalid_message"),
+            ({"agent": "aria", "message": "x" * 4001}, "invalid_message"),
+        ):
+            with self.subTest(code=code, payload=payload):
+                self.connection.request(
+                    "POST", "/api/v1/chat/stream",
+                    body=json.dumps(payload),
+                    headers={"Authorization": "Bearer " + TOKEN,
+                             "Content-Type": "application/json"},
+                )
+                response = self.connection.getresponse()
+                result = json.loads(response.read())
+                self.assertEqual(response.status, 400)
+                self.assertEqual(result["error"]["code"], code)
+                self.assertTrue(response.getheader("Content-Type").startswith("application/json"))
+
     def test_mobile_gui_chat_stream_fails_closed_without_provider(self):
         self.connection.request(
             "POST", "/api/v1/chat/stream",
