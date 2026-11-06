@@ -138,6 +138,22 @@ class Debian13ApiTests(unittest.TestCase):
             self.assertIsInstance(json.loads(lines[1][6:]), dict)
         self.assertNotIn(r"\\n", events)
 
+    def test_terminal_stream_rejects_unauthenticated_post_and_closes_connection(self):
+        for token in (None, "invalid-token"):
+            headers = {"Content-Type": "application/json"}
+            if token is not None:
+                headers["Authorization"] = "Bearer " + token
+            self.connection.request(
+                "POST", "/api/v1/terminal/stream",
+                body=json.dumps({"command": "cat hello.txt"}),
+                headers=headers,
+            )
+            response = self.connection.getresponse()
+            payload = json.loads(response.read())
+            self.assertEqual(response.status, 401)
+            self.assertEqual(payload["error"]["code"], "unauthorized")
+            self.assertEqual(response.getheader("Connection"), "close")
+
     def test_terminal_rejects_shells_unknown_commands_and_paths_outside_workspace(self):
         self.assertEqual(self.request_json("POST", "/v1/terminal", {"command": "sh -c id"})[0], 403)
         status, data = self.request_json("POST", "/v1/terminal", {"command": "cat ../../etc/passwd"})
