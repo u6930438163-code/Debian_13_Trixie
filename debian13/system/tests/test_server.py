@@ -214,6 +214,10 @@ class Debian13ApiTests(unittest.TestCase):
         for payload, code in (
             ({"agent": [], "message": "Hello"}, "invalid_profile"),
             ({"agent": "unknown", "message": "Hello"}, "invalid_profile"),
+            ({"agent": "aria", "message": None}, "invalid_message"),
+            ({"agent": "aria", "message": 42}, "invalid_message"),
+            ({"agent": "aria", "message": []}, "invalid_message"),
+            ({"agent": "aria", "message": {"text": "Hello"}}, "invalid_message"),
             ({"agent": "aria", "message": ""}, "invalid_message"),
             ({"agent": "aria", "message": " "}, "invalid_message"),
             ({"agent": "aria", "message": "x" * 4001}, "invalid_message"),
