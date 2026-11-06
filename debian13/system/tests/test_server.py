@@ -306,6 +306,23 @@ class Debian13ApiTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             validate_provider_url("******example.com/v1/chat/completions")
 
+    def test_internal_ollama_url_requires_explicit_opt_in_and_exact_port(self):
+        from unittest.mock import patch
+
+        endpoint = "http://ollama:11434/v1/chat/completions"
+        with patch.dict(os.environ, {"DEBIAN13_ALLOW_INTERNAL_OLLAMA": "0"}):
+            with self.assertRaises(ValueError):
+                validate_provider_url(endpoint)
+        with patch.dict(os.environ, {"DEBIAN13_ALLOW_INTERNAL_OLLAMA": "1"}):
+            self.assertEqual(validate_provider_url(endpoint), endpoint)
+            for unsafe in (
+                "http://ollama:11435/v1/chat/completions",
+                "http://ollama:11434/v1/chat/completions?token=secret",
+                "http://user:password@ollama:11434/v1/chat/completions",
+            ):
+                with self.subTest(url=unsafe), self.assertRaises(ValueError):
+                    validate_provider_url(unsafe)
+
     def test_rate_limit_returns_429(self):
         self.server.config["rate_limit"] = 2
         self.assertEqual(self.request_json("GET", "/v1/profiles")[0], 200)
