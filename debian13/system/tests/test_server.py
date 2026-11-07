@@ -311,6 +311,39 @@ class Debian13ApiTests(unittest.TestCase):
             provider.server_close()
             worker.join(timeout=2)
 
+    def test_local_keyless_provider_supports_authenticated_gui_sse(self):
+        provider = ThreadingHTTPServer(("127.0.0.1", 0), ProviderHandler)
+        worker = threading.Thread(target=provider.serve_forever, daemon=True)
+        worker.start()
+        try:
+            self.server.config.update({
+                "model_chat_url": f"http://127.0.0.1:{provider.server_port}/v1/chat/completions",
+                "model_api_key": "",
+                "model_name": "local-sse-model",
+            })
+            self.connection.request(
+                "POST", "/api/v1/chat/stream",
+                body=json.dumps({"agent": "aria", "message": "Test local SSE"}),
+                headers={"Authorization": "Bearer " + TOKEN,
+                         "Content-Type": "application/json"},
+            )
+            reply = self.connection.getresponse()
+            events = reply.read().decode("utf-8")
+            self.assertEqual(reply.status, 200)
+            self.assertTrue(reply.getheader("Content-Type").startswith("text/event-stream"))
+            self.assertIn("event: delta\\n", events)
+            self.assertIn("Real test-provider response.", events)
+            self.assertIn("event: done\\n", events)
+            self.assertEqual(provider.body["model"], "local-sse-model")
+            self.assertEqual(provider.body["messages"], [
+                {"role": "user", "content": "Test local SSE"},
+            ])
+            self.assertIsNone(provider.authorization)
+        finally:
+            provider.shutdown()
+            provider.server_close()
+            worker.join(timeout=2)
+
     def test_remote_provider_without_key_is_not_configured(self):
         self.server.config.update({
             "model_chat_url": "https://provider.example/v1/chat/completions",
