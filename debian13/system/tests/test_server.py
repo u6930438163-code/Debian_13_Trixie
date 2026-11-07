@@ -283,6 +283,49 @@ class Debian13ApiTests(unittest.TestCase):
         self.assertEqual(payload["error"]["code"], "provider_not_configured")
         self.assertTrue(response.getheader("Content-Type").startswith("application/json"))
 
+    def test_local_ollama_compatible_provider_works_without_api_key(self):
+        provider = ThreadingHTTPServer(("127.0.0.1", 0), ProviderHandler)
+        worker = threading.Thread(target=provider.serve_forever, daemon=True)
+        worker.start()
+        try:
+            self.server.config.update({
+                "model_chat_url": f"http://127.0.0.1:{provider.server_port}/v1/chat/completions",
+                "model_api_key": "",
+                "model_name": "local-test-model",
+            })
+            status, profiles = self.request_json("GET", "/v1/profiles")
+            self.assertEqual(status, 200)
+            self.assertTrue(profiles["providerConfigured"])
+            status, diagnostics = self.request_json("GET", "/v1/diagnostics")
+            self.assertEqual(status, 200)
+            self.assertTrue(diagnostics["providerConfigured"])
+            status, response = self.request_json("POST", "/v1/chat", {
+                "profile": "aria", "message": "Local inference fixture",
+            })
+            self.assertEqual(status, 200)
+            self.assertEqual(response["content"], "Real test-provider response.")
+            self.assertIsNone(provider.authorization)
+            self.assertEqual(provider.body["model"], "local-test-model")
+        finally:
+            provider.shutdown()
+            provider.server_close()
+            worker.join(timeout=2)
+
+    def test_remote_provider_without_key_is_not_configured(self):
+        self.server.config.update({
+            "model_chat_url": "https://provider.example/v1/chat/completions",
+            "model_api_key": "",
+            "model_name": "remote-model",
+        })
+        status, profiles = self.request_json("GET", "/v1/profiles")
+        self.assertEqual(status, 200)
+        self.assertFalse(profiles["providerConfigured"])
+        status, response = self.request_json("POST", "/v1/chat", {
+            "profile": "aria", "message": "Must not send",
+        })
+        self.assertEqual(status, 503)
+        self.assertEqual(response["error"]["code"], "provider_not_configured")
+
     def test_chat_calls_configured_provider_with_selected_profile(self):
         provider = ThreadingHTTPServer(("127.0.0.1", 0), ProviderHandler)
         provider_thread = threading.Thread(target=provider.serve_forever, daemon=True)

@@ -305,8 +305,16 @@ def validate_image(image: object) -> str:
     return "data:" + mime + ";base64," + encoded
 
 
+def provider_configured(config: dict) -> bool:
+    url = config.get("model_chat_url", "")
+    if not url or not config.get("model_name"):
+        return False
+    host = urllib.parse.urlsplit(url).hostname
+    return bool(config.get("model_api_key") or host in {"127.0.0.1", "localhost", "::1", "ollama"})
+
+
 def complete_chat(profile: str, message: str, config: dict, image: str | None = None) -> tuple[str, str]:
-    if not config["model_chat_url"] or not config["model_api_key"] or not config["model_name"]:
+    if not provider_configured(config):
         raise ApiError(503, "provider_not_configured", "No AI model provider is configured.")
     model = config.get("vision_model_name", "") if image is not None else config["model_name"]
     if not model:
@@ -332,7 +340,7 @@ def complete_chat(profile: str, message: str, config: dict, image: str | None = 
         config["model_chat_url"],
         data=payload,
         headers={
-            "Authorization": "Bearer " + config["model_api_key"],
+            **({"Authorization": "Bearer " + config["model_api_key"]} if config["model_api_key"] else {}),
             "Content-Type": "application/json",
             "Accept": "application/json",
         },
@@ -383,11 +391,7 @@ def runtime_diagnostics(server) -> dict:
         "effectiveUid": os.geteuid(),
         "effectiveGid": os.getegid(),
         "workspaceWritable": os.access(server.workspace, os.W_OK),
-        "providerConfigured": bool(
-            server.config["model_chat_url"]
-            and server.config["model_api_key"]
-            and server.config["model_name"]
-        ),
+        "providerConfigured": provider_configured(server.config),
         "linuxSecurity": linux_security,
     }
 
@@ -599,11 +603,7 @@ class SystemHandler(http.server.BaseHTTPRequestHandler):
                     {"id": key, "name": value["name"], "active": False}
                     for key, value in PROFILES.items()
                 ],
-                "providerConfigured": bool(
-                    self.server.config["model_chat_url"]
-                    and self.server.config["model_api_key"]
-                    and self.server.config["model_name"]
-                ),
+                "providerConfigured": provider_configured(self.server.config),
             })
             return
         if self.path == "/v1/diagnostics":
