@@ -331,9 +331,9 @@ class Debian13ApiTests(unittest.TestCase):
             events = reply.read().decode("utf-8")
             self.assertEqual(reply.status, 200)
             self.assertTrue(reply.getheader("Content-Type").startswith("text/event-stream"))
-            self.assertIn("event: delta\\n", events)
+            self.assertIn("event: delta\n", events)
             self.assertIn("Real test-provider response.", events)
-            self.assertIn("event: done\\n", events)
+            self.assertIn("event: done\n", events)
             self.assertEqual(provider.body["model"], "local-sse-model")
             self.assertEqual(provider.body["messages"], [
                 {"role": "user", "content": "Test local SSE"},
