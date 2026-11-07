@@ -486,7 +486,7 @@ class Debian13ApiTests(unittest.TestCase):
                 "model_name": "local-text",
                 "vision_model_name": "llama3.2-vision:11b",
             })
-            photo = base64.b64encode(b"\\x89PNG\\r\\n\\x1a\\n" + b"test-image-bytes").decode()
+            photo = base64.b64encode(b"\x89PNG\r\n\x1a\n" + b"test-image-bytes").decode()
             status, result = self.request_json("POST", "/v1/vision", {
                 "profile": "aria",
                 "message": "Describe the picture.",
