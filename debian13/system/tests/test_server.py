@@ -475,6 +475,33 @@ class Debian13ApiTests(unittest.TestCase):
             provider.server_close()
             worker.join(timeout=3)
 
+    def test_keyless_local_vision_uses_model_without_provider_authorization(self):
+        provider = ThreadingHTTPServer(("127.0.0.1", 0), ProviderHandler)
+        worker = threading.Thread(target=provider.serve_forever, daemon=True)
+        worker.start()
+        try:
+            self.server.config.update({
+                "model_chat_url": f"http://127.0.0.1:{provider.server_port}/v1/chat/completions",
+                "model_api_key": "",
+                "model_name": "local-text",
+                "vision_model_name": "llama3.2-vision:11b",
+            })
+            photo = base64.b64encode(b"\\x89PNG\\r\\n\\x1a\\n" + b"test-image-bytes").decode()
+            status, result = self.request_json("POST", "/v1/vision", {
+                "profile": "aria",
+                "message": "Describe the picture.",
+                "image": {"mime_type": "image/png", "base64": photo},
+            })
+            self.assertEqual(status, 200)
+            self.assertEqual(result["model"], "llama3.2-vision:11b")
+            self.assertEqual(provider.authorization, None)
+            self.assertEqual(provider.body["model"], "llama3.2-vision:11b")
+            self.assertEqual(provider.body["messages"][0]["content"][0]["text"], "Describe the picture.")
+        finally:
+            provider.shutdown()
+            provider.server_close()
+            worker.join(timeout=3)
+
     def test_provider_url_rejects_untrusted_schemes_and_non_loopback_http(self):
         unsafe_endpoints = (
             "http://example.com/v1/chat/completions",
