@@ -202,6 +202,16 @@ class Debian13ApiTests(unittest.TestCase):
                     self.assertEqual(status, 400)
                     self.assertEqual(data["error"]["code"], "invalid_message")
 
+    def test_chat_and_vision_require_authentication_before_provider(self):
+        for path in ("/v1/chat", "/v1/vision"):
+            for token in (None, "invalid-token"):
+                with self.subTest(path=path, token=token):
+                    status, data = self.request_json("POST", path, {
+                        "profile": "aria", "message": "Hello",
+                    }, token=token)
+                    self.assertEqual(status, 401)
+                    self.assertEqual(data["error"]["code"], "unauthorized")
+
     def test_chat_fails_closed_without_a_model_provider(self):
         status, data = self.request_json("POST", "/v1/chat", {"profile": "aria", "message": "test"})
         self.assertEqual(status, 503)
