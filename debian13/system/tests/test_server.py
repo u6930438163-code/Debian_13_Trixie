@@ -418,6 +418,19 @@ class Debian13ApiTests(unittest.TestCase):
                 with self.subTest(endpoint=endpoint):
                     self.assertEqual(validate_provider_url(endpoint), endpoint)
 
+    def test_loopback_ollama_url_rejects_embedded_credentials_and_query(self):
+        from unittest.mock import patch
+
+        unsafe_endpoints = (
+            "http://user:password@127.0.0.1:11434/v1/chat/completions",
+            "http://localhost:11434/v1/chat/completions?api_key=secret",
+            "http://[::1]:11434/v1/chat/completions#fragment",
+        )
+        with patch.dict(os.environ, {"DEBIAN13_ALLOW_INTERNAL_OLLAMA": "0"}):
+            for endpoint in unsafe_endpoints:
+                with self.subTest(endpoint=endpoint), self.assertRaises(ValueError):
+                    validate_provider_url(endpoint)
+
     def test_internal_ollama_url_requires_explicit_opt_in_and_exact_port(self):
         from unittest.mock import patch
 
