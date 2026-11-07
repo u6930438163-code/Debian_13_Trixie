@@ -405,6 +405,13 @@ class Debian13ApiTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             validate_provider_url("******example.com/v1/chat/completions")
 
+    def test_loopback_ollama_endpoint_works_without_internal_network_opt_in(self):
+        from unittest.mock import patch
+
+        endpoint = "http://127.0.0.1:11434/v1/chat/completions"
+        with patch.dict(os.environ, {"DEBIAN13_ALLOW_INTERNAL_OLLAMA": "0"}):
+            self.assertEqual(validate_provider_url(endpoint), endpoint)
+
     def test_internal_ollama_url_requires_explicit_opt_in_and_exact_port(self):
         from unittest.mock import patch
 
