@@ -217,6 +217,15 @@ class Debian13ApiTests(unittest.TestCase):
         self.assertEqual(status, 503)
         self.assertEqual(data["error"]["code"], "provider_not_configured")
 
+    def test_vision_fails_closed_without_a_model_provider(self):
+        photo = base64.b64encode(b"\x89PNG\r\n\x1a\n" + b"test-image-bytes").decode()
+        status, data = self.request_json("POST", "/v1/vision", {
+            "profile": "aria", "message": "Describe this image.",
+            "image": {"mime_type": "image/png", "base64": photo},
+        })
+        self.assertEqual(status, 503)
+        self.assertEqual(data["error"]["code"], "provider_not_configured")
+
     def test_mobile_gui_chat_stream_requires_authentication(self):
         for token in (None, "invalid-token"):
             headers = {"Content-Type": "application/json"}
