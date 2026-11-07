@@ -400,10 +400,17 @@ class Debian13ApiTests(unittest.TestCase):
             worker.join(timeout=3)
 
     def test_provider_url_rejects_untrusted_schemes_and_non_loopback_http(self):
-        with self.assertRaises(ValueError):
-            validate_provider_url("http://example.com/v1/chat/completions")
-        with self.assertRaises(ValueError):
-            validate_provider_url("******example.com/v1/chat/completions")
+        unsafe_endpoints = (
+            "http://example.com/v1/chat/completions",
+            "http://192.168.1.10/v1/chat/completions",
+            "http://10.0.0.1/v1/chat/completions",
+            "http://127.0.0.2:11434/v1/chat/completions",
+            "ftp://localhost/v1/chat/completions",
+            "file:///v1/chat/completions",
+        )
+        for endpoint in unsafe_endpoints:
+            with self.subTest(endpoint=endpoint), self.assertRaises(ValueError):
+                validate_provider_url(endpoint)
 
     def test_loopback_ollama_endpoint_works_without_internal_network_opt_in(self):
         from unittest.mock import patch
