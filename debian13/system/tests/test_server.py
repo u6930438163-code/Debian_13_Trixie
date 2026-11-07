@@ -378,6 +378,8 @@ class Debian13ApiTests(unittest.TestCase):
             self.assertEqual(status, 200)
             self.assertEqual(result["model"], "llama3.2-vision:11b")
             self.assertEqual(provider.body["model"], "llama3.2-vision:11b")
+            self.assertEqual(provider.authorization, "Bearer fixture-provider-key")
+            self.assertEqual([message["role"] for message in provider.body["messages"]], ["user"])
             segments = provider.body["messages"][0]["content"]
             self.assertEqual(segments[0]["text"], "Describe this image.")
             self.assertTrue(segments[1]["image_url"]["url"].startswith("data:image/png;base64,"))
