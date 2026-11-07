@@ -274,6 +274,7 @@ class Debian13ApiTests(unittest.TestCase):
                     self.assertEqual(data["content"], "Real test-provider response.")
                     self.assertEqual(data["profile"], profile)
                     self.assertEqual(provider.authorization, "Bearer " + self.server.config["model_api_key"])
+                    self.assertEqual(provider.body["model"], "integration-test-model")
                     self.assertEqual(provider.body["messages"], [
                         {"role": "user", "content": "Review this test."},
                     ])
